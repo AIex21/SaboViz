@@ -14,7 +14,7 @@ Ensure you have the following installed before proceeding:
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/yourusername/saboviz.git](https://github.com/yourusername/saboviz.git)
+git clone https://github.com/AIex21/SaboViz.git
 cd saboviz
 ```
 
