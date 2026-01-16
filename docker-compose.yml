@@ -1,0 +1,71 @@
+services:
+  # Database
+  db:
+    image: postgres:15
+    container_name: sabo_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Backend
+  backend:
+    build: ./backend
+    container_name: sabo_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - parser-builder
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RASCAL_IMAGE_NAME: sabo-rascal-parser:latest
+      SHARED_DATA_VOLUME: sabo_shared_data
+      EXTERNAL_LIBS_PATHS: ${EXTERNAL_LIBS_PATHS}
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sabo_shared_data:/sabo-data
+      - sabo_shared_libs:/sabo-libs
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: sabo_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Alpha parser
+  parser-builder:
+    build:
+      context: ./alpha-rascal
+      dockerfile: Dockerfile
+    image: sabo-rascal-parser:latest
+    container_name: sabo_parser_image_builder
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["echo", "Rascal Image Built"]
+
+volumes:
+  postgres_data:
+
+  sabo_shared_data:
+    name: sabo_shared_data
+    driver: local
+
+  sabo_shared_libs:
+    name: sabo_shared_libs
+    driver: local

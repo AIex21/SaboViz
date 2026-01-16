@@ -1,0 +1,9 @@
+{
+    "inputFolderAbsolutePath": "/data/project",
+    "externalLibRoot": "/data/ext",
+    "saveFilesAsJson": true,
+    "composeModels": true,
+    "verbose": true,
+    "localDrive": "C:",
+    "saveUnresolvedIncludes": false
+}   
