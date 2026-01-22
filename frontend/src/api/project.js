@@ -69,6 +69,36 @@ export const projectApi = {
     continueIngestion: async (projectId) => {
         const response = await api.post('/projects/' + projectId + '/continue');
         return response.data;
+    },
+
+    getTraces: async (projectId) => {
+        const response = await api.get('/projects/' + projectId + '/traces');
+        return response.data;
+    },
+
+    getTraceFile: async (traceId) => {
+        const response = await api.get('/traces/' + traceId + '/file');
+        return response.data;
+    },
+
+    uploadTrace: async (projectId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await api.post(`/projects/${projectId}/traces`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
+    deleteTrace: async (traceId) => {
+        const response = await api.delete('/traces/' + traceId);
+        return response.data;
+    },
+    
+    getHierarchy: async (projectId, nodeIds) => {
+        const response = await api.post(`/projects/${projectId}/hierarchy`, nodeIds);
+        return response.data;
     }
 };
 

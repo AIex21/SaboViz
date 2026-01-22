@@ -81,6 +81,36 @@ class GraphRepository:
         self.db.bulk_insert_mappings(Edge, edges_data)
         self.db.commit()
 
+    def get_batch_hierarchy(self, project_id: int, node_ids: list[str]) -> dict:
+        results = (self.db.query(Node.id, Node.ancestors, Node.properties)
+                        .filter(Node.project_id == project_id,
+                                Node.id.in_(node_ids))
+                        .all())
+        
+        hierarchy = {}
+        for row in results:
+            hierarchy[row.id] = {
+                "ancestors": row.ancestors,
+                "properties": row.properties
+            }
+        
+        return hierarchy
+
+    def get_operation_map(self, project_id: int) -> dict:
+        results = (self.db.query(Node.id, Node.properties)
+                        .filter(Node.project_id == project_id,
+                                Node.labels.contains(['Operation']))
+                        .all())
+        
+        lookup = {}
+        for row in results:
+            node_id = row.id 
+            props = row.properties
+            if props and "simpleName" in props:
+                lookup[props["simpleName"]] = node_id
+
+        return lookup
+
     def get_aggregated_edges(self, project_id: int, visible_ids: list[str]):
         if not visible_ids:
             return []

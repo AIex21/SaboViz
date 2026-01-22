@@ -4,6 +4,8 @@ import { projectApi } from '../../api/project';
 import { THEME } from '../../config/graphConfig';
 import ConfirmationModal from '../Panel/ConfirmationModal';
 import UnresolvedModal from '../Panel/UnresolvedModal';
+import TraceUploadModal from '../Panel/TraceUploadModal';
+import TraceListModal from '../Panel/TraceListModal';
 import { useToast } from '../../context/ToastContext';
 
 const ProjectsPage = () => {
@@ -16,6 +18,8 @@ const ProjectsPage = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [projectToDelete, setProjectToDelete] = useState(null);
     const [selectedUnresolved, setSelectedUnresolved] = useState(null);
+    const [selectedProjectForTrace, setSelectedProjectForTrace] = useState(null);
+    const [viewTracesProject, setViewTracesProject] = useState(null);
 
     useEffect(() => { 
         loadProjects(); 
@@ -116,6 +120,28 @@ const ProjectsPage = () => {
         const project = selectedUnresolved;
         setSelectedUnresolved(null);
         handleRequestDelete(null, project);
+    }
+
+    const handleOpenTraceModal = (e, project) => {
+        e.stopPropagation();
+        setSelectedProjectForTrace(project);
+    }
+
+    const handleUploadTrace = async (projectId, file) => {
+        try {
+            await projectApi.uploadTrace(projectId, file);
+            showToast("Trace uploaded successfully!", "success");
+            setSelectedProjectForTrace(null);
+        } catch (error) {
+            const msg = error.response?.data?.detail || error.message;
+            showToast(`Trace upload failed: ${msg}`, "error");
+            throw error;
+        }
+    }
+
+    const handleViewTraces = (e, project) => {
+        e.stopPropagation();
+        setViewTracesProject(project);
     }
 
     return (
@@ -235,13 +261,37 @@ const ProjectsPage = () => {
                             </div>
 
                             <div style={styles.cardFooter}>
-                                {p.status === 'ready' ? (
-                                    <span style={styles.openLink}>Open Workspace →</span>
-                                ): p.status === 'unresolved' ? (
-                                    <span style={{fontSize: '12px', color: '#eab308'}}>Action Required</span>
-                                ) : (
-                                    <span style={{fontSize: '12px', color: '#667'}}>Please wait...</span>
-                                )}
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
+                                    {p.status === 'ready' ? (
+                                        <span style={styles.openLink}>Open Workspace →</span>
+                                    ): p.status === 'unresolved' ? (
+                                        <span style={{fontSize: '12px', color: '#eab308'}}>Action Required</span>
+                                    ) : (
+                                        <span style={{fontSize: '12px', color: '#667'}}>Please wait...</span>
+                                    )}
+
+                                    {p.status === 'ready' && (
+                                        <div style={{display: 'flex', gap: '8px'}}>
+                                            {/* VIEW TRACES BUTTON */}
+                                            <button 
+                                                onClick={(e) => handleViewTraces(e, p)}
+                                                style={styles.iconBtn}
+                                                title="View All Traces"
+                                            >
+                                                <span style={{fontSize: '14px'}}>📋</span>
+                                            </button>
+
+                                            {/* UPLOAD TRACE BUTTON */}
+                                            <button 
+                                                onClick={(e) => handleOpenTraceModal(e, p)}
+                                                style={styles.iconBtn}
+                                                title="Add New Trace"
+                                            >
+                                                <span style={{fontSize: '14px'}}>📄</span> +
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -270,6 +320,21 @@ const ProjectsPage = () => {
                     onClose={() => setSelectedUnresolved(null)}
                     onProceed={handleProceed}
                     onDelete={handleDeleteFromModal}    
+                />
+            )}
+
+            {selectedProjectForTrace && (
+                <TraceUploadModal
+                    project={selectedProjectForTrace}
+                    onClose={() => setSelectedProjectForTrace(null)}
+                    onUpload={handleUploadTrace}
+                />
+            )}
+
+            {viewTracesProject && (
+                <TraceListModal
+                    project={viewTracesProject}
+                    onClose={() => setViewTracesProject(null)}
                 />
             )}
         </div>
@@ -538,6 +603,20 @@ const styles = {
         boxShadow: '0 2px 10px rgba(234, 179, 8, 0.3)',
         transition: 'transform 0.1s',
         ':active': { transform: 'scale(0.95)' }
+    },
+    iconBtn: {
+        background: 'rgba(255,255,255,0.05)',
+        border: `1px solid ${THEME.border}`,
+        color: THEME.textMain,
+        borderRadius: '6px',
+        padding: '4px 8px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        transition: 'all 0.2s',
+        ':hover': { background: 'rgba(255,255,255,0.1)' }
     }
 };
 

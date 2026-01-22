@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
@@ -39,3 +40,13 @@ class ProjectSummary(BaseModel):
 class GraphData(BaseModel):
     nodes: List[NodeResponse]
     edges: List[EdgeResponse]
+
+class TraceSummary(BaseModel):
+    id: int
+    project_id: int
+    name: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

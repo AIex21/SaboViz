@@ -9,7 +9,7 @@ cytoscape.use(fcose);
 
 const GHOST_EDGE_ID = 'trace-ghost-edge';
 
-const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleExpand, onToggleLock, lockedNodeIds }) => {
+const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleExpand, onToggleLock, lockedNodeIds, hierarchyMap }) => {
     const [selectedElement, setSelectedElement] = useState(null);
     const [cyInstance, setCyInstance] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -94,26 +94,59 @@ const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleEx
     }, [cyInstance, elements.length]);
 
     // --- 4. TRACE HIGHLIGHTING ---
+    const getVisibleNodeId = (targetId) => {
+        if (!targetId || !cyInstance) return null;
+
+        if (cyInstance.getElementById(targetId).length > 0) return targetId;
+
+        const entry = hierarchyMap?.[targetId];
+        const ancestors = entry?.ancestors;
+        
+        if (ancestors && Array.isArray(ancestors)) {
+            for (const ancestorId of ancestors) {
+                if (cyInstance.getElementById(ancestorId).length > 0) {
+                    return ancestorId;
+                }
+            }
+        }
+        return null;
+    };
+
     useEffect(() => {
         if (!cyInstance) return;
+
         const oldGhost = cyInstance.getElementById(GHOST_EDGE_ID);
         if (oldGhost.length > 0) cyInstance.remove(oldGhost);
         cyInstance.elements().removeClass('trace-active trace-path trace-source');
 
-        if (activeNodeId) {
-             cyInstance.getElementById(activeNodeId).addClass('trace-active').ancestors().addClass('trace-path');
+        if (!activeNodeId || !sourceNodeId) return;
+
+        const visibleActiveId = getVisibleNodeId(activeNodeId);
+        const visibleSourceId = getVisibleNodeId(sourceNodeId);
+
+        if (visibleActiveId) {
+            cyInstance.getElementById(visibleActiveId)
+                .addClass('trace-active')
+                .ancestors().addClass('trace-path');
         }
-        if (sourceNodeId) {
-             cyInstance.getElementById(sourceNodeId).addClass('trace-source');
+        if (visibleSourceId) {
+            cyInstance.getElementById(visibleSourceId).addClass('trace-source');
         }
-        if (activeNodeId && sourceNodeId && currentAction) {
-             cyInstance.add({
+
+        if (visibleActiveId && visibleSourceId && currentAction) {
+            cyInstance.add({
                 group: 'edges',
-                data: { id: GHOST_EDGE_ID, source: sourceNodeId, target: activeNodeId, label: 'executes' },
+                data: {
+                    id: GHOST_EDGE_ID,
+                    source: visibleSourceId,
+                    target: visibleActiveId,
+                    label: 'executes'
+                },
                 classes: 'trace-call-edge'
-             });
+            });
         }
-    }, [cyInstance, activeNodeId, sourceNodeId, currentAction]);
+
+    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, hierarchyMap]);
 
     const toggleEdge = (type) => {
         setEdgeVisibility(prev => ({...prev, [type]: !prev[type]}));
@@ -160,6 +193,7 @@ const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleEx
                 onClose={() => setSelectedElement(null)}
                 onToggleLock={onToggleLock}
                 lockedNodeIds={lockedNodeIds}
+                activeTraceAction={currentAction}
             />
         </div>
     );

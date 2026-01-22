@@ -15,6 +15,8 @@ class Project(Base):
     nodes = relationship("Node", back_populates="project", cascade="all, delete-orphan")
     edges = relationship("Edge", back_populates="project", cascade="all, delete-orphan")
 
+    traces = relationship("Trace", back_populates="project", cascade="all, delete-orphan")
+
 class Node(Base):
     __tablename__ = "nodes"
     __table_args__ = (
@@ -44,3 +46,16 @@ class Edge(Base):
     label = Column(String)
 
     project = relationship("Project", back_populates="edges")
+
+class Trace(Base):
+    __tablename__ = "traces"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+
+    name = Column(String, index=True)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trace_seq_path = Column(String)
+
+    project = relationship("Project", back_populates="traces")

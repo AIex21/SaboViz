@@ -152,3 +152,11 @@ def continue_ingestion(
         raise HTTPException(status_code=404, detail="Analysis file missing.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/projects/{project_id}/hierarchy")
+def get_node_hierarchy(
+    project_id: int,
+    node_ids: List[str] = Body(...),
+    service: GraphService = Depends(get_service)
+):
+    return service.get_batch_hierarchy(project_id, node_ids)

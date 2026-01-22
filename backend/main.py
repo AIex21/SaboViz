@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base
-from app.routers import graph_router
+from app.routers import graph_router, trace_router
 
 # Create Database Tables on startup
 Base.metadata.create_all(bind=engine)
@@ -19,6 +19,7 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(graph_router.router)
+app.include_router(trace_router.router)
 
 @app.get("/")
 def health_check():

@@ -50,12 +50,12 @@ const TracePlayer = ({
           <select
             style={styles.select}
             onChange={(e) => onSelectTrace(e.target.value)}
-            value={currentTrace ? currentTrace.name : ""}
+            value={currentTrace ? currentTrace.id : ""}
           >
             <option value="">Select Scenario...</option>
-            {Object.keys(traces).map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {traces.map((trace) => (
+              <option key={trace.id} value={trace.id}>
+                {trace.name}
               </option>
             ))}
           </select>

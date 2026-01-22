@@ -1,13 +1,15 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import SaboGraph from "../Graph/SaboGraph";
 import TracePlayer from "../Player/TracePlayer";
 import { projectApi } from "../../api/project";
 import { THEME } from "../../config/graphConfig";
+import { useToast } from "../../context/ToastContext";
 
-const TRACES = {};
+const BUFFER_SIZE = 100;
 
 function GraphPage() {
+  const { showToast } = useToast();
   const { id } = useParams();
   const navigate = useNavigate();
   const projectId = parseInt(id);
@@ -15,24 +17,29 @@ function GraphPage() {
   const [graphElements, setGraphElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [projectName, setProjectName] = useState("Loading...");
+  const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
 
   // Trace State
-  const [selectedTraceName, setSelectedTraceName] = useState("");
+  const [availableTraces, setAvailableTraces] = useState([]);
+  const [traceDataMap, setTraceDataMap] = useState({});
+  const [selectedTraceId, setSelectedTraceId] = useState("");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-
-  const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
+  const [hierarchyMap, setHierarchyMap] = useState({});
+  const isFetchingHierarchy = useRef(false);
 
   // Data Loading
   useEffect(() => {
     const loadRoots = async () => {
       setIsLoading(true);
       try {
-        const [projectMeta, rootData] = await Promise.all([
+        const [projectMeta, rootData, traces] = await Promise.all([
              projectApi.getProject(projectId),
-             projectApi.getRoots(projectId)
+             projectApi.getRoots(projectId),
+             projectApi.getTraces(projectId)
         ]);
 
         setProjectName(projectMeta.name);
+        setAvailableTraces(traces);
 
         const cyNodes = rootData.nodes.map(n => formatNode(n));
         const cyEdges = rootData.edges.map(e => formatEdge(e));
@@ -52,13 +59,97 @@ function GraphPage() {
       } catch (error) {
         console.error("Error loading graph data:", error);
         setProjectName("Error Loading Project");
+        showToast("Failed to load project data", "error");
       } finally {
         setIsLoading(false);
       }
     };
 
     loadRoots();
-  }, [projectId]);
+  }, [projectId, showToast]);
+
+  const handleSelectTrace = async (traceIdStr) => {
+    const traceId = parseInt(traceIdStr);
+    if (!traceId) {
+      setSelectedTraceId("");
+      setCurrentStepIndex(0);
+      return;
+    }
+
+    setSelectedTraceId(traceId);
+    setCurrentStepIndex(0);
+
+    if (!traceDataMap[traceId]) {
+      try {
+        const fullContent = await projectApi.getTraceFile(traceId);
+        setTraceDataMap(prev => ({ ...prev, [traceId]: fullContent }) );
+      } catch (error) {
+        console.error("Failed to load trace file:", error);
+        showToast("Failed to load trace data", "error");
+      }
+    }
+  };
+
+  const traceSteps = useMemo(() => {
+    if (!selectedTraceId || !traceDataMap[selectedTraceId]) return [];
+
+    const rawData = traceDataMap[selectedTraceId];
+    // Safety check in case the file format is slightly different
+    const nodes = rawData.elements?.nodes || [];
+    const actionNodes = nodes.filter((n) => n.data.labels && n.data.labels.includes("Action"));
+    
+    return actionNodes.sort((a, b) => a.data.properties.step - b.data.properties.step);
+  }, [selectedTraceId, traceDataMap]);
+
+  const failureIndices = useMemo(() => {
+    return traceSteps
+      .map((step, index) => {
+        const msg = step.data.properties.message || "";
+        if (msg.includes("FAIL") || msg.includes("ERROR")) {
+          return index;
+        }
+        return -1;
+      })
+      .filter((idx) => idx !== -1);
+  }, [traceSteps]);
+  
+  useEffect(() => {
+    if (!traceSteps || traceSteps.length === 0) return;
+
+    const bufferHierarchy = async () => {
+      if (isFetchingHierarchy.current) return;
+      const endStep = Math.min(currentStepIndex + BUFFER_SIZE, traceSteps.length);
+      const upcomingSteps = traceSteps.slice(currentStepIndex, endStep);
+      const missingIds = new Set();
+
+      upcomingSteps.forEach(step => {
+        const props = step.data.properties;
+        const sourceId = props.sourceId;
+        const targetId = props.targetId;
+
+        if (sourceId && !hierarchyMap[sourceId]) {
+          missingIds.add(sourceId);
+        }
+        if (targetId && !hierarchyMap[targetId]) {
+          missingIds.add(targetId);
+        }
+      });
+
+      if (missingIds.size > 0) {
+        isFetchingHierarchy.current = true;
+        try {
+          const newHierarchy = await projectApi.getHierarchy(projectId, Array.from(missingIds));
+          setHierarchyMap(prev => ({ ...prev, ...newHierarchy }));
+        } catch (error) {
+          console.error("Hierarchy buffer failed", error);
+          showToast("Failed to buffer hierarchy data", "error");
+        } finally {
+          isFetchingHierarchy.current = false;
+        }
+      }
+    };
+    bufferHierarchy();
+  }, [currentStepIndex, traceSteps, hierarchyMap, projectId]);
 
   const formatNode = (node) => ({
     data: {
@@ -204,24 +295,22 @@ function GraphPage() {
 
   const graphData = useMemo(() => ({ elements: visibleElements }), [visibleElements]);
 
-  // Trace Logic (Unchanged)
-  const currentTraceData = TRACES[selectedTraceName];
-  const traceSteps = useMemo(() => {
-    if (!currentTraceData) return [];
-    const nodes = currentTraceData.elements.nodes.filter((n) => n.data.labels.includes("Action"));
-    return nodes.sort((a, b) => a.data.properties.step - b.data.properties.step);
-  }, [currentTraceData]);
-
   const { activeTargetId, activeSourceId, currentActionData } = useMemo(() => {
-    if (!traceSteps.length || !currentStepIndex)
+    if (!traceSteps.length) {
       return { activeTargetId: null, activeSourceId: null, currentActionData: null };
-    const step = traceSteps[currentStepIndex];
+    }
+
+    const safeIndex = Math.min(currentStepIndex, traceSteps.length - 1);
+    const step = traceSteps[safeIndex];
+
     return step ? {
-          activeTargetId: step.data.properties.targetId,
-          activeSourceId: step.data.properties.sourceId,
-          currentActionData: step.data.properties,
-        } : {};
-  }, [traceSteps, currentStepIndex, currentTraceData]);
+      activeTargetId: step.data.properties.targetId,
+      activeSourceId: step.data.properties.sourceId,
+      currentActionData: step.data.properties,
+    } : {};
+  }, [traceSteps, currentStepIndex]);
+
+  const currentTraceObj = availableTraces.find(t => t.id === selectedTraceId);
 
   return (
     <div style={styles.container}>
@@ -276,19 +365,18 @@ function GraphPage() {
           currentAction={currentActionData}
           onToggleLock={toggleLock}
           lockedNodeIds={lockedNodeIds}
+          hierarchyMap={hierarchyMap}
         />
       </div>
 
       <TracePlayer
-        traces={TRACES}
-        currentTrace={currentTraceData ? { name: selectedTraceName } : null}
-        onSelectTrace={(name) => {
-          setSelectedTraceName(name);
-          setCurrentStepIndex(0);
-        }}
+        traces={availableTraces}
+        currentTrace={currentTraceObj}
+        onSelectTrace={handleSelectTrace}
         currentStep={currentStepIndex}
         totalSteps={traceSteps.length}
         onStepChange={setCurrentStepIndex}
+        failureIndices={failureIndices}
       />
     </div>
   );
