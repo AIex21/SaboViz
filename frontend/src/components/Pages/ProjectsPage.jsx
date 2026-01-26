@@ -105,11 +105,14 @@ const ProjectsPage = () => {
 
     const handleProceed = async () => {
         if (!selectedUnresolved) return;
+        const targetId = selectedUnresolved.id;
         try {
             await projectApi.continueIngestion(selectedUnresolved.id);
             showToast("Ingestion resumed...", "success");
             setSelectedUnresolved(null);
-            loadProjects();
+            setProjects(prev => prev.map(p => 
+                p.id === targetId ? { ...p, status: 'processing' } : p
+            ));
         } catch (err) {
             showToast("Failed to resume ingestion", "error");
         }

@@ -93,18 +93,33 @@ const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleEx
         return () => clearTimeout(timer);
     }, [cyInstance, elements.length]);
 
+    const visibleNodeSet = useMemo(() => {
+        const set = new Set();
+        if (elements) {
+            elements.forEach(el => {
+                if (!el.data.source) {
+                    set.add(el.data.id);
+                }
+            });
+        }
+        return set;
+    }, [elements]);
+
     // --- 4. TRACE HIGHLIGHTING ---
     const getVisibleNodeId = (targetId) => {
-        if (!targetId || !cyInstance) return null;
+        if (!targetId) return null;
 
-        if (cyInstance.getElementById(targetId).length > 0) return targetId;
+        if (visibleNodeSet.has(targetId)) {
+            return targetId;
+        }
 
         const entry = hierarchyMap?.[targetId];
         const ancestors = entry?.ancestors;
         
         if (ancestors && Array.isArray(ancestors)) {
-            for (const ancestorId of ancestors) {
-                if (cyInstance.getElementById(ancestorId).length > 0) {
+            for (let i = 0; i < ancestors.length; i++) {
+                const ancestorId = ancestors[i];
+                if (visibleNodeSet.has(ancestorId)) {
                     return ancestorId;
                 }
             }
@@ -125,12 +140,16 @@ const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleEx
         const visibleSourceId = getVisibleNodeId(sourceNodeId);
 
         if (visibleActiveId) {
-            cyInstance.getElementById(visibleActiveId)
-                .addClass('trace-active')
-                .ancestors().addClass('trace-path');
+            const node = cyInstance.getElementById(visibleActiveId);
+            if (node.length > 0) {
+                node.addClass('trace-active').ancestors().addClass('trace-path');
+            }
         }
         if (visibleSourceId) {
-            cyInstance.getElementById(visibleSourceId).addClass('trace-source');
+            const node = cyInstance.getElementById(visibleSourceId);
+            if (node.length > 0) {
+                node.addClass('trace-source');
+            }
         }
 
         if (visibleActiveId && visibleSourceId && currentAction) {
@@ -146,7 +165,7 @@ const SaboGraph = ({ data, activeNodeId, sourceNodeId, currentAction, onToggleEx
             });
         }
 
-    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, hierarchyMap]);
+    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, hierarchyMap, visibleNodeSet]);
 
     const toggleEdge = (type) => {
         setEdgeVisibility(prev => ({...prev, [type]: !prev[type]}));
