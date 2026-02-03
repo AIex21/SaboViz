@@ -1,0 +1,79 @@
+services:
+  # Database
+  db:
+    image: docker.io/library/postgres:15
+    container_name: sabo_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Backend
+  backend:
+    build: ./backend
+    container_name: sabo_backend
+    ports:
+      - "8000:8000"
+    restart: on-failure
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RASCAL_IMAGE_NAME: "localhost/sabo-rascal-parser:latest"
+      SHARED_DATA_VOLUME: sabo_shared_data
+      EXTERNAL_LIBS_PATHS: ${EXTERNAL_LIBS_PATHS}
+      # Tell the Docker SDK inside python to look for the mapped socket
+      DOCKER_HOST: tcp://host.containers.internal:2375
+    volumes:
+      - ./backend:/app:Z              # Change: Added :Z for SELinux permission
+      # Change: Map the USER podman socket to the container's docker socket
+      # Note: ${XDG_RUNTIME_DIR} usually resolves to /run/user/1000
+      # - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:Z 
+      - sabo_shared_data:/sabo-data:Z # Change: Added :Z
+      - sabo_shared_libs:/sabo-libs:Z # Change: Added :Z
+    security_opt:                     # Change: Often needed for rootless containers to build/run others
+      - label=disable
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: sabo_frontend
+    ports:
+      - "5173:5173"
+    stdin_open: true  # Keeps the container running
+    tty: true         # Allocates a pseudo-TTY
+    depends_on:
+      - backend
+    environment:
+      # This points to your browser's localhost. 
+      # Since we map port 8000 in the backend service, this is correct.
+      REACT_APP_API_URL: http://localhost:8000
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app:Z             # Change: Added :Z
+      - /app/node_modules
+    command: npm run dev
+
+  # Alpha parser
+  parser-builder:
+    build:
+      context: ./alpha-rascal
+      dockerfile: Dockerfile
+    image: sabo-rascal-parser:latest
+    container_name: sabo_parser_image_builder
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["echo", "Rascal Image Built"]
+
+volumes:
+  postgres_data:
+  sabo_shared_data:
+    name: sabo_shared_data
+    driver: local
+  sabo_shared_libs:
+    name: sabo_shared_libs
+    driver: local

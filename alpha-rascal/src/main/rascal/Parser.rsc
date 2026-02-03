@@ -114,6 +114,10 @@ private void processCppFiles(list[loc] cppFilePaths, str appName) {
     int length = size(cppFilePaths);
 
     for (loc cppFilePath <- cppFilePaths) {
+        if (!exists(cppFilePath)) {
+            println("[ERROR] File does not exist: <cppFilePath>");
+            continue; 
+        }
         str fileName = getNameFromFilePath(cppFilePath);
         extractedModels = extractModelsFromCppFile(cppFilePath, includeFiles, stdLibFiles);
         extractedModels[0] = filterSystemLibs(extractedModels[0], stdLibFiles);

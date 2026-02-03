@@ -187,7 +187,7 @@ class TraceParser:
             pid = ""
             extra = ""
             
-        return TraceEntry(
+        entry = TraceEntry(
             component=component,
             field2=field2,
             process=process,
@@ -201,6 +201,10 @@ class TraceParser:
             raw_line=line,
             line_number=line_num
         )
+
+        entry.function_name = entry.get_clean_function_name()
+
+        return entry
     
 class SequenceBuilder:
     def __init__(self):
