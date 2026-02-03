@@ -175,7 +175,7 @@ podman-compose -f podman-compose.yml up --build
 
 ---
 
-**Access Points:**
+## Access Points:
 
 | Service | URL / Port | Description |
 | :--- | :--- | :--- |
