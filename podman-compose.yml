@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data:Z
 
   # Backend
   backend:
@@ -27,16 +27,12 @@ services:
       RASCAL_IMAGE_NAME: "localhost/sabo-rascal-parser:latest"
       SHARED_DATA_VOLUME: sabo_shared_data
       EXTERNAL_LIBS_PATHS: ${EXTERNAL_LIBS_PATHS}
-      # Tell the Docker SDK inside python to look for the mapped socket
-      DOCKER_HOST: tcp://host.containers.internal:2375
     volumes:
-      - ./backend:/app:Z              # Change: Added :Z for SELinux permission
-      # Change: Map the USER podman socket to the container's docker socket
-      # Note: ${XDG_RUNTIME_DIR} usually resolves to /run/user/1000
-      # - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:Z 
-      - sabo_shared_data:/sabo-data:Z # Change: Added :Z
-      - sabo_shared_libs:/sabo-libs:Z # Change: Added :Z
-    security_opt:                     # Change: Often needed for rootless containers to build/run others
+      - ./backend:/app:Z
+      - ${PODMAN_SOCKET}:/var/run/docker.sock:Z
+      - sabo_shared_data:/sabo-data:Z
+      - sabo_shared_libs:/sabo-libs:Z
+    security_opt:
       - label=disable
 
   # Frontend
@@ -45,17 +41,13 @@ services:
     container_name: sabo_frontend
     ports:
       - "5173:5173"
-    stdin_open: true  # Keeps the container running
-    tty: true         # Allocates a pseudo-TTY
     depends_on:
       - backend
     environment:
-      # This points to your browser's localhost. 
-      # Since we map port 8000 in the backend service, this is correct.
       REACT_APP_API_URL: http://localhost:8000
       CHOKIDAR_USEPOLLING: "true"
     volumes:
-      - ./frontend:/app:Z             # Change: Added :Z
+      - ./frontend:/app:Z
       - /app/node_modules
     command: npm run dev
 
@@ -64,7 +56,7 @@ services:
     build:
       context: ./alpha-rascal
       dockerfile: Dockerfile
-    image: sabo-rascal-parser:latest
+    image: localhost/sabo-rascal-parser:latest
     container_name: sabo_parser_image_builder
     entrypoint: ["/bin/sh", "-c"]
     command: ["echo", "Rascal Image Built"]

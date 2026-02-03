@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Cache Maven Dependencies
 COPY pom.xml .
+COPY lib ./lib
 RUN mvn dependency:go-offline
 
 # Copy Source Code

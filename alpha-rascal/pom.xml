@@ -30,11 +30,43 @@
       <groupId>org.rascalmpl</groupId>
       <artifactId>rascal</artifactId>
       <version>0.34.2</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/lib/rascal-0.34.2.jar</systemPath>
     </dependency>
     <dependency>
         <groupId>org.rascalmpl</groupId>
         <artifactId>clair</artifactId>
         <version>0.13.1</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/clair-0.13.1.jar</systemPath>
+    </dependency>
+    <dependency>
+        <groupId>org.rascalmpl</groupId>
+        <artifactId>rascal-cdt-repackaged</artifactId>
+        <version>0.2.0</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/rascal-cdt-repackaged-0.2.0.jar</systemPath>
+    </dependency>
+    <dependency>
+        <groupId>commons-lang</groupId>
+        <artifactId>commons-lang</artifactId>
+        <version>2.6</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/commons-lang-2.6.jar</systemPath>
+    </dependency>
+    <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13.1</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/junit-4.13.1.jar</systemPath>
+    </dependency>
+    <dependency>
+        <groupId>org.hamcrest</groupId>
+        <artifactId>hamcrest-core</artifactId>
+        <version>1.3</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/hamcrest-core-1.3.jar</systemPath>
     </dependency>
   </dependencies>
 
