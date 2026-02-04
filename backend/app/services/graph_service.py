@@ -40,6 +40,9 @@ class GraphService:
     def get_project_by_id(self, project_id: int):
         return self.repo.get_project_by_id(project_id)
     
+    def change_project_status(self, project_id: int, status: str, description: str):
+        return self.repo.change_project_status(project_id, status, description)
+    
     def mark_as_deleting(self, project_id: int) -> bool:
         return self.repo.mark_project_as_deleting(project_id)
     

@@ -1,0 +1,117 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.usethesource</groupId>
+    <artifactId>pom_parent</artifactId>
+    <version>0.3.5</version>
+    <packaging>pom</packaging>
+
+    <scm> 
+        <developerConnection>scm:git:ssh://git@github.com/usethesource/pom-parent</developerConnection>
+    <tag>v0.3.5</tag>
+  </scm>	
+
+    <properties>
+        <tycho-version>1.4.0</tycho-version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>		
+        <maven-scm-version>1.9.5</maven-scm-version>
+    </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>usethesource-releases</id>
+            <url>https://nexus.usethesource.io/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>usethesource-snapshots</id>
+            <url>https://nexus.usethesource.io/content/repositories/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <repositories>
+        <repository>
+            <id>usthesource-rascalmpl-stable</id>
+            <url>https://update.rascal-mpl.org/stable</url>
+        </repository>
+
+        <repository>
+            <id>usethesource-rascalmpl-unstable</id>
+            <layout>p2</layout>
+            <url>https://update.rascal-mpl.org/unstable/</url>
+        </repository>
+
+        <repository>
+            <id>unstable</id>
+            <url>https://nexus.usethesource.io/content/repositories/public/</url>
+        </repository>
+
+        <repository>
+            <id>neon</id>
+            <layout>p2</layout>
+            <url>https://nexus.usethesource.io/content/repositories/eclipse-neon/</url>
+        </repository>
+
+        <repository>
+            <id>cdt</id>
+            <layout>p2</layout>
+            <url>https://nexus.usethesource.io/content/repositories/eclipse-cdt/</url>
+        </repository>
+        <repository>
+            <id>cdt95</id>
+            <layout>p2</layout>
+            <url>https://nexus.usethesource.io/content/repositories/cdt9.5/</url>
+        </repository>
+        <repository>
+            <id>tm</id>
+            <layout>p2</layout>
+            <url>https://nexus.usethesource.io/content/repositories/tm-terminal-marketplace/</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>usethesource</id>
+            <url>https://nexus.usethesource.io/content/repositories/public/</url>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-maven-plugin</artifactId>
+                <version>${tycho-version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <compilerArgument>-warn:none</compilerArgument>     
+                    <compilerArgument>-err:none</compilerArgument>      
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-source-plugin</artifactId>
+                <version>${tycho-version}</version>
+                <executions>
+                    <execution>
+                        <id>plugin-source</id>
+                        <goals>
+                            <goal>plugin-source</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>target-platform-configuration</artifactId>
+                <version>${tycho-version}</version>
+                <configuration>
+                    <resolver>p2</resolver>
+                    <pomDependencies>consider</pomDependencies>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project> 

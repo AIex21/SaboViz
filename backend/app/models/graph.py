@@ -16,6 +16,7 @@ class Project(Base):
     edges = relationship("Edge", back_populates="project", cascade="all, delete-orphan")
 
     traces = relationship("Trace", back_populates="project", cascade="all, delete-orphan")
+    features = relationship("Feature", back_populates="project", cascade="all, delete-orphan")
 
 class Node(Base):
     __tablename__ = "nodes"
@@ -36,6 +37,12 @@ class Node(Base):
     hasChildren = Column(Boolean, default=False)
 
     project = relationship("Project", back_populates="nodes")
+
+    features = relationship(
+        "Feature",
+        secondary="feature_nodes",
+        back_populates="nodes"
+    )
 
 class Edge(Base):
     __tablename__ = "edges"

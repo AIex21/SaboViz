@@ -99,6 +99,11 @@ export const projectApi = {
     getHierarchy: async (projectId, nodeIds) => {
         const response = await api.post(`/projects/${projectId}/hierarchy`, nodeIds);
         return response.data;
+    },
+
+    startDecomposition: async (projectId) => {
+        const response = await api.post(`/projects/${projectId}/decompose`);
+        return response.data;
     }
 };
 

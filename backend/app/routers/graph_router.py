@@ -8,6 +8,7 @@ from typing import List
 from app.core.database import get_db
 from app.services.graph_service import GraphService
 from app.services.ingest_service import IngestService
+from app.services.func_decomp_service import FunctionalDecompositionService
 from app.services.rascal_service import RascalService, run_full_analysis_pipeline
 from app.schemas.graph_schemas import NodeResponse, EdgeResponse, ProjectSummary, GraphData
 
@@ -18,6 +19,9 @@ def get_service(db: Session = Depends(get_db)):
 
 def get_ingest_service(db: Session = Depends(get_db)):
     return IngestService(db)
+
+def get_decomposition_service(db: Session = Depends(get_db)):
+    return FunctionalDecompositionService(db)
 
 @router.get("/projects", response_model=List[ProjectSummary])
 def get_projects(
@@ -160,3 +164,19 @@ def get_node_hierarchy(
     service: GraphService = Depends(get_service)
 ):
     return service.get_batch_hierarchy(project_id, node_ids)
+
+@router.post("/projects/{project_id}/decompose")
+def start_decomposition(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    service: FunctionalDecompositionService = Depends(get_decomposition_service),
+    graph_service: GraphService = Depends(get_service)
+):
+    if not graph_service.get_project_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        background_tasks.add_task(service.run_functional_decomposition, project_id)
+        return {"message": "Decomposition started in the background"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

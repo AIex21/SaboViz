@@ -6,6 +6,7 @@ import ConfirmationModal from '../Panel/ConfirmationModal';
 import UnresolvedModal from '../Panel/UnresolvedModal';
 import TraceUploadModal from '../Panel/TraceUploadModal';
 import TraceListModal from '../Panel/TraceListModal';
+import ModalButton from '../Common/ModalButton';
 import { useToast } from '../../context/ToastContext';
 
 const ProjectsPage = () => {
@@ -147,6 +148,20 @@ const ProjectsPage = () => {
         setViewTracesProject(project);
     }
 
+    const handleStartDecomposition = async (e, projectId) => {
+        e.stopPropagation();
+        try {
+            await projectApi.startDecomposition(projectId);
+            showToast("Functional decomposition started in background.", "info");
+
+            setProjects(prev => prev.map(p => 
+                p.id === projectId ? { ...p, status: 'decomposing', description: 'Grouping features...' } : p
+            ));
+        } catch (error) {
+            showToast("Failed to start decomposition.", "error");
+        }
+    }
+
     return (
         <div style={styles.pageWrapper}>
             <div style={styles.container}>
@@ -275,6 +290,21 @@ const ProjectsPage = () => {
 
                                     {p.status === 'ready' && (
                                         <div style={{display: 'flex', gap: '8px'}}>
+
+                                            {/* FUNCTIONAL DECOMPOSITION BUTTON */}
+                                            <ModalButton 
+                                                variant="primary" 
+                                                style={{ 
+                                                    backgroundColor: THEME.accent, 
+                                                    height: '28px', 
+                                                    padding: '0 10px',
+                                                    fontSize: '11px' 
+                                                }}
+                                                onClick={(e) => handleStartDecomposition(e, p.id)}
+                                            >
+                                                Extract Features
+                                            </ModalButton>
+
                                             {/* VIEW TRACES BUTTON */}
                                             <button 
                                                 onClick={(e) => handleViewTraces(e, p)}
