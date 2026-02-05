@@ -54,3 +54,9 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555; 
 }
+
+.tooltip-trigger:hover .tooltip-content {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateX(-50%) translateY(0) !important;
+}

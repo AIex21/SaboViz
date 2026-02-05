@@ -7,6 +7,7 @@ import UnresolvedModal from '../Panel/UnresolvedModal';
 import TraceUploadModal from '../Panel/TraceUploadModal';
 import TraceListModal from '../Panel/TraceListModal';
 import ModalButton from '../Common/ModalButton';
+import DecompositionModal from '../Panel/DecompositionModal'
 import { useToast } from '../../context/ToastContext';
 
 const ProjectsPage = () => {
@@ -21,13 +22,14 @@ const ProjectsPage = () => {
     const [selectedUnresolved, setSelectedUnresolved] = useState(null);
     const [selectedProjectForTrace, setSelectedProjectForTrace] = useState(null);
     const [viewTracesProject, setViewTracesProject] = useState(null);
+    const [selectedProjectForDecomp, setSelectedProjectForDecomp] = useState(null);
 
     useEffect(() => { 
         loadProjects(); 
     }, []);
 
     useEffect(() => {
-        const hasProcessing = projects.some(p => p.status === 'processing' || p.status === 'pending');
+        const hasProcessing = projects.some(p => p.status === 'processing' || p.status === 'pending' || p.status === 'decomposing');
         
         let intervalId;
         if (hasProcessing) {
@@ -148,11 +150,16 @@ const ProjectsPage = () => {
         setViewTracesProject(project);
     }
 
-    const handleStartDecomposition = async (e, projectId) => {
+    const handleOpenDecompModal = (e, project) => {
         e.stopPropagation();
+        setSelectedProjectForDecomp(project);
+    };
+
+    const handleConfirmDecomposition = async (projectId, distThreshold, infraThreshold) => {
         try {
-            await projectApi.startDecomposition(projectId);
-            showToast("Functional decomposition started in background.", "info");
+            await projectApi.startDecomposition(projectId, distThreshold, infraThreshold);
+            
+            showToast("Functional decomposition started.", "info");
 
             setProjects(prev => prev.map(p => 
                 p.id === projectId ? { ...p, status: 'decomposing', description: 'Grouping features...' } : p
@@ -160,7 +167,7 @@ const ProjectsPage = () => {
         } catch (error) {
             showToast("Failed to start decomposition.", "error");
         }
-    }
+    };
 
     return (
         <div style={styles.pageWrapper}>
@@ -225,7 +232,7 @@ const ProjectsPage = () => {
                             key={p.id} 
                             style={{
                                 ...styles.card, 
-                                opacity: p.status === 'processing' ? 0.6 : 1,
+                                opacity: (p.status === 'processing' || p.status === 'decomposing') ? 0.6 : 1,
                                 pointerEvents: p.status === 'processing' ? 'none' : 'auto'
                             }} onClick={() => p.status === 'ready' && navigate(`/project/${p.id}`)}>
                             <div style={styles.cardHeader}>
@@ -256,6 +263,7 @@ const ProjectsPage = () => {
                                         padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700'
                                     }}>
                                         {p.status === 'processing' ? '⚡ PROCESSING...' : 
+                                        p.status === 'decomposing' ? '🧩 EXTRACTING...' :
                                         p.status === 'error' ? '⚠ FAILED' : 
                                         p.status === 'unresolved' ? '⚠ ACTION NEEDED' :
                                         '● READY'}
@@ -300,7 +308,7 @@ const ProjectsPage = () => {
                                                     padding: '0 10px',
                                                     fontSize: '11px' 
                                                 }}
-                                                onClick={(e) => handleStartDecomposition(e, p.id)}
+                                                onClick={(e) => handleOpenDecompModal(e, p)}
                                             >
                                                 Extract Features
                                             </ModalButton>
@@ -370,6 +378,14 @@ const ProjectsPage = () => {
                     onClose={() => setViewTracesProject(null)}
                 />
             )}
+
+            {selectedProjectForDecomp && (
+                <DecompositionModal
+                    project={selectedProjectForDecomp}
+                    onClose={() => setSelectedProjectForDecomp(null)}
+                    onConfirm={handleConfirmDecomposition}
+                />
+            )}
         </div>
     );
 };
@@ -377,6 +393,7 @@ const ProjectsPage = () => {
 const getStatusColor = (status) => {
     switch(status) {
         case 'processing': return THEME.warning; // Orange
+        case 'decomposing': return THEME.accent;
         case 'error': return THEME.danger;       // Red
         case 'unresolved': return THEME.unresolved;
         default: return THEME.success;           // Green
@@ -386,6 +403,7 @@ const getStatusColor = (status) => {
 const getStatusGradient = (status) => {
     switch(status) {
         case 'processing': return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+        case 'decomposing': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
         case 'error': return 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)';
         case 'unresolved': return 'linear-gradient(135deg, #facc15 0%, #ca8a04 100%)';
         default: return 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';

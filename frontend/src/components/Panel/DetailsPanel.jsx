@@ -17,14 +17,15 @@ const CODE_KEYS = new Set([
 
 const STATUS_KEYS = new Set(['Message', 'message', 'status', 'error']);
 
-const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, activeTraceAction }) => {
+const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, activeTraceAction, features = [] }) => {
     
     if (!selectedElement) return null;
 
     const { 
         id, label, simpleName, 
         source, target, 
-        breakdown, weight, isAggregated
+        breakdown, weight, isAggregated,
+        participating_features
     } = selectedElement;
 
     // --- CONTEXT ---
@@ -109,6 +110,10 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
         return <span style={styles.valueText}>{String(val)}</span>;
     };
 
+    const associatedFeatures = (participating_features || []).map(featId => {
+        return features.find(f => f.id === featId);
+    }).filter(Boolean);
+
     return (
         <div style={styles.panel}>
             {/* HEADER */}
@@ -136,7 +141,6 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
             </div>
 
             <div style={styles.content}>
-                
                 {/* 1. EDGE CONNECTIONS (Now visible for ALL edges, including Trace) */}
                 {isEdge && (
                     <div style={styles.section}>
@@ -187,6 +191,24 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {associatedFeatures.length > 0 && (
+                    <div style={styles.section}>
+                        <h4 style={styles.sectionTitle}>Participating Features</h4>
+                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '6px'}}>
+                            {associatedFeatures.map(feat => (
+                                <span key={feat.id} style={{
+                                    ...styles.badgeValue, 
+                                    backgroundColor: feat.category === 'Infrastructure' ? '#444' : '#7950f2',
+                                    fontSize: '11px', 
+                                    display: 'flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                    {feat.category === 'Infrastructure' ? '⚙️' : '🧩'} {feat.name}
+                                </span>
+                            ))}
+                        </div>
                     </div>
                 )}
 

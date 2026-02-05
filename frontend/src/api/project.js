@@ -101,8 +101,18 @@ export const projectApi = {
         return response.data;
     },
 
-    startDecomposition: async (projectId) => {
-        const response = await api.post(`/projects/${projectId}/decompose`);
+    startDecomposition: async (projectId, distanceThreshold = 0.4, infrastructureThreshold = 0.3) => {
+        const response = await api.post(`/projects/${projectId}/decompose`, null, {
+            params: {
+                distance_threshold: distanceThreshold,
+                infrastructure_threshold: infrastructureThreshold
+            }
+        });
+        return response.data;
+    },
+
+    getFeatures: async (projectId) => {
+        const response = await api.get(`/projects/${projectId}/features`);
         return response.data;
     }
 };

@@ -13,5 +13,8 @@ class FeatureRepository:
         self.db.query(Feature).filter(Feature.project_id == project_id).delete(synchronize_session=False)
         self.db.commit()
 
+    def get_features_by_project(self, project_id: int):
+        return self.db.query(Feature).filter(Feature.project_id == project_id).all()
+
     def commit(self):
         self.db.commit()

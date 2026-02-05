@@ -15,6 +15,8 @@ class NodeResponse(BaseModel):
     properties: Dict[str, Any] = {}
     hasChildren: bool = False
 
+    participating_features: List[int] = []
+
     class Config:
         from_attributes = True
 

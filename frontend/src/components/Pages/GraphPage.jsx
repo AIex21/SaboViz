@@ -17,7 +17,12 @@ function GraphPage() {
   const [graphElements, setGraphElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [projectName, setProjectName] = useState("Loading...");
+  const [projectStatus, setProjectStatus] = useState("ready");
   const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
+
+  // Feature State
+  const [features, setFeatures] = useState([]);
+  const [activeFeatureIds, setActiveFeatureIds] = useState(new Set());
 
   // Trace State
   const [availableTraces, setAvailableTraces] = useState([]);
@@ -32,14 +37,17 @@ function GraphPage() {
     const loadRoots = async () => {
       setIsLoading(true);
       try {
-        const [projectMeta, rootData, traces] = await Promise.all([
+        const [projectMeta, rootData, traces, featureList] = await Promise.all([
              projectApi.getProject(projectId),
              projectApi.getRoots(projectId),
-             projectApi.getTraces(projectId)
+             projectApi.getTraces(projectId),
+             projectApi.getFeatures(projectId)
         ]);
 
         setProjectName(projectMeta.name);
+        setProjectStatus(projectMeta.status);
         setAvailableTraces(traces);
+        setFeatures(featureList);
 
         const cyNodes = rootData.nodes.map(n => formatNode(n));
         const cyEdges = rootData.edges.map(e => formatEdge(e));
@@ -67,6 +75,18 @@ function GraphPage() {
 
     loadRoots();
   }, [projectId, showToast]);
+
+  const handleFeatureToggle = (featureId) => {
+    setActiveFeatureIds(prev => {
+      const next = new Set(prev);
+      if (next.has(featureId)) {
+        next.delete(featureId);
+      } else {
+        next.add(featureId);
+      }
+      return next;
+    })
+  }
 
   const handleSelectTrace = async (traceIdStr) => {
     const traceId = parseInt(traceIdStr);
@@ -158,7 +178,8 @@ function GraphPage() {
       properties: node.properties,
       simpleName: node.properties?.simpleName || node.id,
       label: node.labels ? node.labels[0] : "",
-      hasChildren: node.hasChildren
+      hasChildren: node.hasChildren,
+      participating_features: node.participating_features || []
     },
     classes: node.labels ? node.labels[0] : "",
   });
@@ -198,8 +219,13 @@ function GraphPage() {
       const targetNode = graphElements.find(el => el.data.id === nodeId);
       if (!targetNode) return;
 
+      // ==========================================
+      // 1. COLLAPSE LOGIC
+      // ==========================================
       if (targetNode.data.expanded) {
         const idsToRemove = getDescendantIds(nodeId, graphElements);
+        
+        // Remove descendants and edges connected to them
         const nextElements = graphElements.filter(el => {
           if (idsToRemove.has(el.data.id)) return false;
           if (el.data.source && (idsToRemove.has(el.data.source) || idsToRemove.has(el.data.target))) return false;
@@ -213,28 +239,69 @@ function GraphPage() {
         const newVisibleIds = nextElements.filter(el => !el.data.source).map(el => el.data.id);
         const aggData = await projectApi.getAggregatedEdges(projectId, newVisibleIds);
 
+        // Filter Aggregates (Simple check: no self-loops)
+        // We don't check 'newChildIds' here because we aren't adding any.
+        const validAggregates = (aggData.edges || []).filter(edge => 
+             String(edge.data.source) !== String(edge.data.target)
+        );
+
         const finalElements = [
           ...nextElements.filter(el => !el.data.isAggregated),
-          ...(aggData.edges || [])
+          ...validAggregates
         ];
 
         setGraphElements(finalElements);
         return;
       }
 
+      // ==========================================
+      // 2. EXPAND LOGIC
+      // ==========================================
       const childData = await projectApi.getChildren(projectId, nodeId);
 
       if (!childData.nodes || childData.nodes.length === 0) return;
 
+      // A. Define Nodes & IDs FIRST (so we can use them in filters)
       const allNodes = childData.nodes.map(n => formatNode(n));
-      const allRealEdges = childData.edges.map(e => formatEdge(e));
+      const newChildIds = allNodes.map(n => n.data.id); 
 
-      const newChildIds = allNodes.map(n => n.data.id);
+      // B. Filter Real Edges (Structural)
+      // Hide edges connecting the Parent to its new Children (Vertical noise)
+      const allRealEdges = (childData.edges || []).map(e => formatEdge(e)).filter(edge => {
+          const src = String(edge.data.source);
+          const tgt = String(edge.data.target);
+          const parentId = String(nodeId);
+
+          const isParentToChild = (src === parentId && newChildIds.includes(tgt));
+          const isChildToParent = (tgt === parentId && newChildIds.includes(src));
+
+          if (isParentToChild || isChildToParent) return false;
+          return true;
+      });
+
+      // C. Fetch & Filter Aggregated Edges
       const currentVisibleIds = graphElements.filter(el => !el.data.source).map(el => el.data.id);
       const combinedVisibleIds = [...currentVisibleIds, ...newChildIds];
-
       const aggData = await projectApi.getAggregatedEdges(projectId, combinedVisibleIds);
 
+      const validAggregates = (aggData.edges || []).filter(edge => {
+          const src = String(edge.data.source);
+          const tgt = String(edge.data.target);
+          const parentId = String(nodeId);
+
+          // No Self Loops
+          if (src === tgt) return false;
+
+          // No Vertical Aggregates (Parent <-> New Child)
+          const isParentToChild = (src === parentId && newChildIds.includes(tgt));
+          const isChildToParent = (tgt === parentId && newChildIds.includes(src));
+
+          if (isParentToChild || isChildToParent) return false;
+
+          return true;
+      });
+
+      // D. Update State
       setGraphElements(prevElements => {
         const updatedPrevElements = prevElements.map(el =>
           el.data.id === nodeId
@@ -248,7 +315,7 @@ function GraphPage() {
           ...cleanPrevElements,
           ...allNodes,
           ...allRealEdges,
-          ...(aggData.edges || [])
+          ...validAggregates
         ];
       })
 
@@ -366,6 +433,10 @@ function GraphPage() {
           onToggleLock={toggleLock}
           lockedNodeIds={lockedNodeIds}
           hierarchyMap={hierarchyMap}
+          features={features}
+          activeFeatureIds={activeFeatureIds}
+          onFeatureToggle={handleFeatureToggle}
+          isDecomposing={projectStatus === 'decomposing'}
         />
       </div>
 

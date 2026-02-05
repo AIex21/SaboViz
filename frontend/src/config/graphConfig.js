@@ -329,5 +329,35 @@ export const saboStylesheet = [
     {
         selector: '.trace-call-edge',
         style: { 'width': 3, 'line-style': 'dashed', 'line-dash-pattern': [5, 5], 'line-color': '#ff6b6b', 'target-arrow-color': '#ff6b6b', 'opacity': 1, 'z-index': 999 }
+    },
+    {
+        selector: '.feature-dim',
+        style: {
+            'opacity': 0.1, // Dim nodes that aren't part of the feature
+            'transition-property': 'opacity',
+            'transition-duration': '0.3s'
+        }
+    },
+    {
+        selector: 'node.feature-highlight',
+        style: {
+            'opacity': 1,
+            'border-width': 4,
+            'border-color': '#8b5cf6', // Purple (THEME.accent)
+            'background-color': '#8b5cf6',
+            'background-opacity': 0.2,
+            'text-background-opacity': 1,
+            'z-index': 9999
+        }
+    },
+    {
+        selector: 'edge.feature-highlight',
+        style: {
+            'opacity': 1,
+            'width': 4,
+            'line-color': '#8b5cf6',
+            'target-arrow-color': '#8b5cf6',
+            'z-index': 999
+        }
     }
 ];

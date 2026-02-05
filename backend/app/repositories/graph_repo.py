@@ -53,18 +53,22 @@ class GraphRepository:
         return self.db.query(Edge).filter(Edge.project_id == project_id).all()
     
     def get_roots(self, project_id: int):
-        return self.db.query(Node).filter(
+        roots = self.db.query(Node).filter(
             Node.project_id == project_id,
             Node.parent_id == None,
             not_(Node.labels.contains(["Variable"]))
         ).all()
+
+        return self.attach_features_to_nodes(project_id, roots)
     
     def get_children(self, project_id: int, parent_node_id: str):
-        return self.db.query(Node).filter(
+        children = self.db.query(Node).filter(
             Node.project_id == project_id,
             Node.parent_id == parent_node_id,
             not_(Node.labels.contains(["Variable"]))
         ).all()
+
+        return self.attach_features_to_nodes(project_id, children)
     
     def get_edges_for_nodes(self, project_id: int, node_ids: list[str]):
         return self.db.query(Edge).filter(
@@ -216,3 +220,46 @@ class GraphRepository:
         except Exception as e:
             print(f"Error calculating aggregates: {e}")
             return []
+        
+    def attach_features_to_nodes(self, project_id: int, nodes: list[Node]):
+        if not nodes:
+            return []
+
+        node_ids = [n.id for n in nodes]
+
+        # 2. Optimized GIN Query
+        # Only returns rows for nodes that ACTUALLY have features (or descendants with features).
+        sql = text("""
+            SELECT 
+                relevant_node.id as node_id, 
+                array_agg(DISTINCT fn.feature_id) as feature_ids
+            FROM nodes n
+            JOIN feature_nodes fn ON n.db_id = fn.node_db_id
+            JOIN nodes relevant_node ON relevant_node.id = ANY(:node_ids)
+            WHERE 
+                n.project_id = :project_id
+                AND (
+                    -- Case A: The node itself has the feature
+                    n.id = relevant_node.id
+                    OR 
+                    -- Case B: A descendant has the feature (Bubbling up)
+                    n.ancestors @> ARRAY[relevant_node.id]
+                )
+            GROUP BY relevant_node.id
+        """)
+
+        results = self.db.execute(sql, {
+            "project_id": project_id, 
+            "node_ids": node_ids
+        }).fetchall()
+
+        # 3. Create a Lookup Map
+        # If a node ID is not in this map, it means it has NO features.
+        feature_map = {row.node_id: row.feature_ids for row in results}
+
+        # 4. Attach to objects
+        for node in nodes:
+            # .get() defaults to [] if the node isn't found in the map
+            node.participating_features = feature_map.get(node.id, [])
+
+        return nodes

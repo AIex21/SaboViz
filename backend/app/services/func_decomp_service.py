@@ -131,7 +131,7 @@ class FunctionalDecompositionService:
         
         return name
 
-    def run_functional_decomposition(self, project_id: int):
+    def run_functional_decomposition(self, project_id: int, distance_threshold: float, infrastructure_threshold: float):
         self.graph_service.change_project_status(
             project_id,
             status="decomposing",
@@ -140,7 +140,7 @@ class FunctionalDecompositionService:
         traces = self.load_traces(project_id)
         X, all_functions = self.build_feature_matrix(traces)
         X_weighted, idf_scores = self.frequency_filtering(X)
-        clusters = self.cluster_traces(X_weighted, distance_threshold = self.DISTANCE_THRESHOLD)
+        clusters = self.cluster_traces(X_weighted, distance_threshold)
 
         self.feature_repo.delete_features_by_project(project_id)
         db_nodes = self.graph_service.get_all_nodes(project_id)
@@ -148,7 +148,7 @@ class FunctionalDecompositionService:
         
         for label, indices in clusters.items():
             avg_score = np.mean(idf_scores[indices])
-            is_infrastructure = avg_score < self.INFRASTRUCTURE_THRESHOLD
+            is_infrastructure = avg_score < infrastructure_threshold
 
             components = [all_functions[idx] for idx in indices]
 
@@ -169,7 +169,7 @@ class FunctionalDecompositionService:
                 category=category,
                 score=float(avg_score)
             )
-            feature.nodes =linked_nodes
+            feature.nodes = linked_nodes
 
             self.feature_repo.create_feature_without_commit(feature)
         
@@ -180,3 +180,6 @@ class FunctionalDecompositionService:
             status="ready",
             description="Functional Decomposition successfully completed."
         )
+
+    def get_features(self, project_id: int):
+        return self.feature_repo.get_features_by_project(project_id)

@@ -1,7 +1,7 @@
 import json
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Body, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -170,13 +170,25 @@ def start_decomposition(
     project_id: int,
     background_tasks: BackgroundTasks,
     service: FunctionalDecompositionService = Depends(get_decomposition_service),
-    graph_service: GraphService = Depends(get_service)
+    graph_service: GraphService = Depends(get_service),
+    distance_threshold: float = Query(0.4, ge=0.0, le=1.0, description="Max distance to group features"),
+    infrastructure_threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min ubiquity to mark as infrastructure")
 ):
     if not graph_service.get_project_by_id(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     
     try:
-        background_tasks.add_task(service.run_functional_decomposition, project_id)
+        background_tasks.add_task(service.run_functional_decomposition, project_id, distance_threshold, infrastructure_threshold)
         return {"message": "Decomposition started in the background"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/projects/{project_id}/features")
+def get_features(
+    project_id: int,
+    service: FunctionalDecompositionService = Depends(get_decomposition_service),
+    graph_service: GraphService = Depends(get_service)
+):
+    if not graph_service.get_project_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return service.get_features(project_id)
