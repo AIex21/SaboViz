@@ -108,7 +108,7 @@ Because the compiled environment is large (~ 1.1 GB), it is not stored in the Gi
 
 #### 1. Download the `sabo-viz-full.tar` file from this link: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQApxTtUo8HCTLz2cGpt0TdHAQUdrz8vOOCn6TGvCMGEE60?e=x2YWAI
 
-#### 2. Place the downloaded .tar file in the same directory as the docker-compose.prod.yml (or podman-compose.prod.yml) and .env files.
+#### 2. Place the downloaded `sabo-viz-full.tar` file in the same directory as the `docker-compose.prod.yml` (or `podman-compose.prod.yml`) and `.env` files.
 
 ### 2. Deploy
 
