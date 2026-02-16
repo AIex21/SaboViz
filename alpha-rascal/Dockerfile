@@ -3,18 +3,16 @@ FROM maven:3.9-eclipse-temurin-11
 
 WORKDIR /app
 
-COPY maven_repository /app/maven_repository
-COPY settings-offline.xml .
-
 # Cache Maven Dependencies
 COPY pom.xml .
+RUN mvn dependency:go-offline
 
 # Copy Source Code
 COPY src /app/src
 COPY META-INF ./META-INF
 
 # Build the Project
-RUN mvn -o -s settings-offline.xml compile
+RUN mvn -o
 
 # Create Mount Points for the external data
 RUN mkdir -p /data/project \
@@ -27,4 +25,4 @@ RUN mkdir -p /data/project \
 COPY config.docker.json ./config.json
 
 # Run
-ENTRYPOINT ["mvn", "-o", "-s", "settings-offline.xml", "rascal:console"]
+ENTRYPOINT ["mvn", "-o", "rascal:console"]

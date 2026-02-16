@@ -1,6 +1,9 @@
 # Security & Environment
 .env
 
+# Ignore Docker image archives
+sabo-viz-full.tar
+
 # Python Backend
 __pycache__/
 *.py[cod]
