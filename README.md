@@ -43,7 +43,7 @@ EXTERNAL_LIBS_PATHS=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/T
 # Linux Example: /run/user/1000/podman/podman.sock
 PODMAN_SOCKET=/run/podman/podman.sock
 
-#LLM Configuration
+# LLM Configuration
 # Use host.docker.internal, if you are using a local LLM, to allow the container to reach the host machine's localhost
 LLM_BASE_URL=http://host.docker.internal:11434/v1/
 LLM_API_KEY=ollama
