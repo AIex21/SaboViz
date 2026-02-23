@@ -11,6 +11,7 @@ from app.services.ingest_service import IngestService
 from app.services.func_decomp_service import FunctionalDecompositionService
 from app.services.rascal_service import RascalService, run_full_analysis_pipeline
 from app.schemas.graph_schemas import NodeResponse, EdgeResponse, ProjectSummary, GraphData
+from app.services.summarization_service import SummarizationService
 
 router = APIRouter(prefix="/api", tags=["Graph"])
 
@@ -192,3 +193,13 @@ def get_features(
     if not graph_service.get_project_by_id(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return service.get_features(project_id)
+
+@router.post("/projects/{project_id}/summarize")
+def start_summarization(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    service = SummarizationService(db)
+    background_tasks.add_task(service.run_summarization, project_id)
+    return {"message": "Summarization started in the background."}

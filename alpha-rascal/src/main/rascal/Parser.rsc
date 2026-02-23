@@ -136,6 +136,7 @@ private void processCppFiles(list[loc] cppFilePaths, str appName) {
     if (composeModels) {
         M3 composedModels = composeCppM3(|file:///|, M3Models);
         saveComposedExtractedM3ModelsAsJSON(composedModels, appName);
+        saveMethodSnippetsAsJSON(composedModels, appName);
     }
 }
 

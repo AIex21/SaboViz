@@ -314,14 +314,21 @@ class SaboGraphBuilder:
             if (is_variable(s) or is_variable(t)):
                 continue
 
-            if l not in {EDGE_CONTAINS, EDGE_DECLARES, EDGE_INCLUDES, EDGE_ENCAPSULATES, EDGE_ENCLOSES}:
-                edge_list.append({
-                    "data": {
-                        "source": s,
-                        "target": t,
-                        "label": l
-                    }
-                })
+            # if l not in {EDGE_CONTAINS, EDGE_DECLARES, EDGE_INCLUDES, EDGE_ENCAPSULATES, EDGE_ENCLOSES}:
+            #     edge_list.append({
+            #         "data": {
+            #             "source": s,
+            #             "target": t,
+            #             "label": l
+            #         }
+            #     })
+            edge_list.append({
+                "data": {
+                    "source": s,
+                    "target": t,
+                    "label": l
+                }
+            })
 
         return {
             "elements": {

@@ -32,6 +32,7 @@ class Node(Base):
     id = Column(String, index=True)
     labels = Column(ARRAY(String))
     properties = Column(JSON, default={})
+    ai_summary = Column(JSON, nullable=True)
     parent_id = Column(String, index=True, nullable=True)
     ancestors = Column(ARRAY(String), default=[])
     hasChildren = Column(Boolean, default=False)

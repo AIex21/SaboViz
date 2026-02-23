@@ -16,12 +16,23 @@ const SidebarPanel = ({
     return (
         <div style={sidebarContainerStyle(isOpen)}>
             {/* PANEL HEADER */}
-            <div style={headerStyle}>
-                {isOpen && <span style={headerTitleStyle}>EXPLORER</span>}
+            <div style={headerStyle(isOpen)}>
+                {isOpen && (
+                    <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={headerTitleStyle}>FILTERS</span>
+                        <span style={headerSubtitleStyle}>Graph Analysis</span>
+                    </div>
+                )}
                 <button onClick={() => setIsOpen(!isOpen)} style={toggleButtonStyle}>
-                    {isOpen ? '←' : '→'}
+                    {isOpen ? '✕' : '☰'}
                 </button>
             </div>
+
+            {!isOpen && (
+                <div style={verticalTextContainerStyle}>
+                    <span style={verticalTextStyle}>FILTERS</span>
+                </div>
+            )}
 
             {isOpen && (
                 <div style={contentWrapperStyle}>
@@ -52,19 +63,23 @@ const SidebarPanel = ({
                                         onClick={() => toggleEdge(type)} 
                                         style={rowStyle(edgeVisibility[type])}
                                     >
-                                        <div style={labelGroupStyle}>
-                                            <span style={dotStyle(EDGE_COLORS[type], edgeVisibility[type])}></span>
-                                            <span style={textStyle}>{formatKey(type)}</span>
+                                        <div style={structuralLabelGroupStyle}>
+                                            <div style={iconCenterWrapperStyle}>
+                                                <span style={dotStyle(EDGE_COLORS[type], edgeVisibility[type])}></span>
+                                            </div>
+                                            <span style={textStyle(edgeVisibility[type])}>{formatKey(type)}</span>
                                         </div>
-                                        <span style={statusTextStyle(edgeVisibility[type])}>
-                                            {edgeVisibility[type] ? 'VISIBLE' : 'HIDDEN'}
-                                        </span>
+                                        
+                                        {/* Styled Toggle Switch appearance */}
+                                        <div style={visibilityToggleStyle(edgeVisibility[type])}>
+                                            {edgeVisibility[type] ? 'ON' : 'OFF'}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {/* --- SECTION 2: FUNCTIONAL FEATURES (RO2) --- */}
+                        {/* --- SECTION 2: FUNCTIONAL FEATURES --- */}
                         {activeTab === 'functional' && (
                             <div style={sectionStyle}>
                                 <div style={subHeaderStyle}>RECOVERED FEATURES</div>
@@ -78,30 +93,55 @@ const SidebarPanel = ({
 
                                 {!isDecomposing && features.length === 0 && (
                                     <div style={emptyStateStyle}>
-                                        No features recovered. Run decomposition to identify functional units.
+                                        No features recovered yet.<br/>Run decomposition to identify functional units.
                                     </div>
                                 )}
 
-                                {features.map(feature => (
-                                    <div 
-                                        key={feature.id} 
-                                        onClick={() => onFeatureToggle(feature.id)}
-                                        style={rowStyle(activeFeatureIds.has(feature.id))}
-                                    >
-                                        <div style={labelGroupStyle}>
-                                            <span style={featureIconStyle(feature.category)}>
-                                                {feature.category === 'Infrastructure' ? '⚙️' : '🧩'}
-                                            </span>
-                                            <div style={featureTextGroup}>
-                                                <span style={textStyle}>{feature.name}</span>
-                                                <span style={scoreStyle}>Score: {feature.score.toFixed(2)}</span>
+                                {features.map(feature => {
+                                    const isActive = activeFeatureIds.has(feature.id);
+                                    return (
+                                        <div 
+                                            key={feature.id} 
+                                            onClick={() => onFeatureToggle(feature.id)}
+                                            style={featureCardStyle(isActive)}
+                                        >
+                                            {/* TOP ROW: Icon, Text, and Checkbox */}
+                                            <div style={featureCardTopRowStyle}>
+                                                <div style={featureLabelGroupStyle}>
+                                                    <div style={iconTopWrapperStyle}>
+                                                        <span style={featureIconStyle(feature.category)}>
+                                                            {feature.category === 'Infrastructure' ? '⚙️' : '🧩'}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div style={featureTextGroup}>
+                                                        <span style={featureTitleStyle(isActive)}>{feature.name}</span>
+                                                        <div style={metaRowStyle}>
+                                                            <span style={scoreBadgeStyle}>
+                                                                Score: {feature.score.toFixed(2)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* CHECKBOX */}
+                                                <div style={circleCheckboxStyle(isActive)}>
+                                                    {isActive && <span style={checkIconStyle}>✓</span>}
+                                                </div>
                                             </div>
+
+                                            {/* BOTTOM ROW: Full-width Description Box */}
+                                            {feature.description && (
+                                                <div style={descriptionContainerStyle}>
+                                                    <span style={{ fontSize: '12px', marginTop: '1px' }}>✨</span>
+                                                    <span style={descriptionStyle}>
+                                                        {feature.description}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div style={checkboxStyle(activeFeatureIds.has(feature.id))}>
-                                            {activeFeatureIds.has(feature.id) && '✓'}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -111,157 +151,227 @@ const SidebarPanel = ({
     );
 };
 
-// --- STYLES (Matched to Project Theme) ---
+// --- STATES & CONTAINER ---
+
 const sidebarContainerStyle = (isOpen) => ({
-    width: isOpen ? '280px' : '50px',
+    width: isOpen ? '300px' : '60px', 
     position: 'absolute', top: '20px', left: '20px', bottom: '20px',
-    backgroundColor: 'rgba(30, 30, 30, 0.9)', backdropFilter: 'blur(16px)',
-    border: `1px solid ${THEME.border}`, borderRadius: '16px',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 100,
+    // #121212 converted to rgba so the blur effect still works!
+    backgroundColor: 'rgba(18, 18, 18, 0.95)', 
+    backdropFilter: 'blur(20px)',
+    border: `1px solid rgba(255,255,255,0.08)`, 
+    borderRadius: '16px',
+    transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', 
+    zIndex: 100,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.4)'
+    boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
 });
 
-const headerStyle = {
-    height: '60px', padding: '0 16px', display: 'flex', 
-    alignItems: 'center', justifyContent: 'space-between',
-    borderBottom: '1px solid rgba(255,255,255,0.05)'
+const headerStyle = (isOpen) => ({
+    height: '70px', 
+    padding: isOpen ? '0 24px' : '0', 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: isOpen ? 'space-between' : 'center',
+    borderBottom: isOpen ? '1px solid rgba(255,255,255,0.08)' : 'none',
+    background: isOpen ? 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 100%)' : 'transparent',
+    transition: 'all 0.3s'
+});
+
+const headerTitleStyle = { 
+    fontWeight: 800, fontSize: '14px', letterSpacing: '1px', color: THEME.textMain 
+};
+const headerSubtitleStyle = { 
+    fontWeight: 400, fontSize: '11px', color: THEME.textMuted 
 };
 
+const toggleButtonStyle = {
+    background: 'rgba(255,255,255,0.08)', border: 'none', color: THEME.textMain, 
+    cursor: 'pointer', borderRadius: '8px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+    width: '32px', height: '32px', fontSize: '14px',
+    transition: 'background 0.2s',
+    ':hover': { background: 'rgba(255,255,255,0.15)' }
+};
+
+const verticalTextContainerStyle = {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: '20px'
+};
+
+const verticalTextStyle = {
+    writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)',
+    color: '#666666', // Neutral watermark
+    letterSpacing: '6px', fontSize: '13px', fontWeight: '800', opacity: 0.6
+};
+
+const contentWrapperStyle = { 
+    display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' 
+};
+
+// --- NAVIGATION TABS ---
+
 const tabContainerStyle = {
-    display: 'flex', padding: '12px', gap: '8px', 
+    display: 'flex', padding: '16px 16px 0 16px', gap: '12px', 
     borderBottom: '1px solid rgba(255,255,255,0.05)'
 };
 
 const tabStyle = (isActive) => ({
-    flex: 1, padding: '8px 0', fontSize: '10px', fontWeight: '800',
-    backgroundColor: isActive ? 'rgba(255,255,255,0.05)' : 'transparent',
-    color: isActive ? THEME.primary : '#666', border: 'none',
-    borderRadius: '6px', cursor: 'pointer', letterSpacing: '1px',
-    transition: 'all 0.2s'
+    flex: 1, padding: '10px 0', fontSize: '11px', fontWeight: '700',
+    backgroundColor: 'transparent',
+    color: isActive ? THEME.primary : '#888888', 
+    borderBottom: isActive ? `2px solid ${THEME.primary}` : '2px solid transparent',
+    cursor: 'pointer', letterSpacing: '0.5px', transition: 'all 0.2s',
+    border: 'none',
+    borderBottom: isActive ? `2px solid ${THEME.primary}` : '2px solid transparent',
 });
 
-const sectionStyle = { padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' };
-const subHeaderStyle = { fontSize: '10px', fontWeight: '800', color: '#555', marginBottom: '10px', letterSpacing: '1px' };
+const scrollAreaStyle = { 
+    flex: 1, overflowY: 'auto', padding: '0 0 20px 0' 
+};
+
+const sectionStyle = { 
+    padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px' 
+};
+
+const subHeaderStyle = { 
+    fontSize: '11px', fontWeight: '800', color: '#777777', 
+    marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' 
+};
+
+// --- ROW ITEMS ---
 
 const rowStyle = (isActive) => ({
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
-    backgroundColor: isActive ? 'rgba(255,255,255,0.03)' : 'transparent',
-    transition: 'all 0.2s', border: '1px solid transparent',
-    borderColor: isActive ? 'rgba(255,255,255,0.05)' : 'transparent'
+    padding: '12px', borderRadius: '10px', cursor: 'pointer',
+    backgroundColor: isActive ? 'rgba(255,255,255,0.05)' : 'transparent',
+    border: '1px solid',
+    borderColor: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+    transition: 'all 0.2s',
+    marginBottom: '4px'
 });
 
-const textStyle = { color: '#eee', fontSize: '13px', fontWeight: '500' };
-const scoreStyle = { fontSize: '10px', color: '#666', fontFamily: 'monospace' };
+const featureCardStyle = (isActive) => ({
+    display: 'flex', flexDirection: 'column',
+    padding: '12px', borderRadius: '10px', cursor: 'pointer',
+    backgroundColor: isActive ? `${THEME.primary}15` : 'rgba(255,255,255,0.03)',
+    border: '1px solid',
+    borderColor: isActive ? `${THEME.primary}40` : 'transparent',
+    transition: 'all 0.2s',
+    marginBottom: '6px'
+});
+
+const featureCardTopRowStyle = {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%'
+};
+
+const structuralLabelGroupStyle = { 
+    display: 'flex', alignItems: 'center', gap: '12px', flex: 1
+};
+
+const featureLabelGroupStyle = { 
+    display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1
+};
+
+const iconCenterWrapperStyle = {
+    width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+};
+
+const iconTopWrapperStyle = {
+    width: '24px', display: 'flex', justifyContent: 'center', flexShrink: 0, marginTop: '2px' 
+};
+
+const textStyle = (isActive) => ({ 
+    color: isActive ? THEME.textMain : THEME.textMuted, 
+    fontSize: '13px', fontWeight: '500' 
+});
+
+const featureTitleStyle = (isActive) => ({
+    color: isActive ? '#ffffff' : THEME.textMain,
+    fontSize: '13px', fontWeight: '600', marginBottom: '2px', display: 'block'
+});
+
+const featureTextGroup = { 
+    display: 'flex', flexDirection: 'column', flex: 1 
+};
+
+const metaRowStyle = {
+    display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'
+};
+
+const scoreBadgeStyle = { 
+    fontSize: '10px', color: '#888888', fontFamily: 'monospace',
+    background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px'
+};
+
+const descriptionContainerStyle = {
+    display: 'flex', alignItems: 'flex-start', gap: '8px', 
+    marginTop: '10px', padding: '10px 12px', 
+    backgroundColor: 'rgba(255, 255, 255, 0.04)', 
+    borderRadius: '8px',
+    borderLeft: `3px solid ${THEME.primary}80`,
+    width: '100%', boxSizing: 'border-box' 
+};
+
+const descriptionStyle = {
+    fontSize: '12px', color: '#cccccc', // Neutral bright silver
+    lineHeight: '1.5', fontStyle: 'italic', fontWeight: '400'
+};
+
+// --- VISUAL INDICATORS ---
 
 const dotStyle = (color, isVisible) => ({
     width: '8px', height: '8px', borderRadius: '50%',
     backgroundColor: color, 
-    boxShadow: isVisible ? `0 0 8px ${color}` : 'none',
-    opacity: isVisible ? 1 : 0.3
+    boxShadow: isVisible ? `0 0 10px ${color}` : 'none',
+    opacity: isVisible ? 1 : 0.3,
+    transition: 'all 0.3s'
 });
 
 const featureIconStyle = (category) => ({
-    fontSize: '14px', opacity: category === 'Infrastructure' ? 0.5 : 1
+    fontSize: '16px', opacity: category === 'Infrastructure' ? 0.7 : 1, filter: 'grayscale(0.2)'
 });
 
-const checkboxStyle = (isActive) => ({
-    width: '16px', height: '16px', borderRadius: '4px',
-    border: `1px solid ${isActive ? THEME.primary : '#444'}`,
+const circleCheckboxStyle = (isActive) => ({
+    width: '20px', height: '20px', borderRadius: '50%',
+    border: `2px solid ${isActive ? THEME.primary : THEME.border}`,
     backgroundColor: isActive ? THEME.primary : 'transparent',
-    color: '#fff', fontSize: '10px', display: 'flex', 
-    alignItems: 'center', justifyContent: 'center'
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)', 
+    boxShadow: isActive ? `0 0 12px ${THEME.primary}60` : 'none',
+    flexShrink: 0, marginTop: '2px'
 });
 
-const headerTitleStyle = { 
-    fontWeight: 700, 
-    fontSize: '12px', 
-    letterSpacing: '1px', 
-    color: '#888' 
+const checkIconStyle = {
+    color: '#ffffff', fontSize: '12px', fontWeight: 'bold'
 };
 
-const toggleButtonStyle = {
-    background: 'transparent', 
-    border: 'none', 
-    color: '#fff', 
-    cursor: 'pointer', 
-    fontSize: '18px',
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    width: '24px', 
-    height: '24px'
-};
-
-const contentWrapperStyle = { 
-    display: 'flex', 
-    flexDirection: 'column', 
-    flex: 1, 
-    overflow: 'hidden' 
-};
-
-const scrollAreaStyle = { 
-    flex: 1, 
-    overflowY: 'auto', 
-    paddingBottom: '20px' 
-};
-
-const labelGroupStyle = { 
-    display: 'flex', 
-    alignItems: 'center', 
-    gap: '12px' 
-};
-
-const statusTextStyle = (isVisible) => ({
-    fontSize: '10px', 
-    color: isVisible ? '#666' : '#444', 
-    fontFamily: 'monospace'
+const visibilityToggleStyle = (isVisible) => ({
+    fontSize: '10px', fontWeight: '700',
+    color: isVisible ? '#ffffff' : '#888888',
+    background: isVisible ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)',
+    padding: '2px 8px', borderRadius: '12px',
+    minWidth: '30px', textAlign: 'center'
 });
 
-const featureTextGroup = { 
-    display: 'flex', 
-    flexDirection: 'column', 
-    gap: '2px' 
-};
+// --- STATES ---
 
 const loadingStateStyle = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '40px 20px',
-    color: '#666',
-    fontSize: '12px',
-    textAlign: 'center'
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    gap: '16px', padding: '40px 20px', color: THEME.textMuted, fontSize: '13px'
 };
 
 const emptyStateStyle = {
-    padding: '40px 20px',
-    color: '#555',
-    fontSize: '12px',
-    textAlign: 'center',
-    lineHeight: '1.6',
-    fontStyle: 'italic'
+    padding: '40px 20px', color: THEME.textMuted, fontSize: '13px',
+    textAlign: 'center', lineHeight: '1.6',
+    background: 'rgba(255,255,255,0.03)', borderRadius: '12px',
+    margin: '10px'
 };
 
 const spinnerStyle = {
-    width: '20px',
-    height: '20px',
-    borderRadius: '50%',
-    border: '2px solid rgba(255,255,255,0.1)',
-    borderTop: `2px solid ${THEME.primary}`,
+    width: '24px', height: '24px', borderRadius: '50%',
+    border: '3px solid rgba(255,255,255,0.1)',
+    borderTop: `3px solid ${THEME.primary}`,
     animation: 'spin 1s linear infinite'
 };
-
-// Add the keyframe animation if not present in your global CSS
-if (typeof document !== 'undefined' && !document.getElementById('sidebar-animations')) {
-    const styleSheet = document.createElement("style");
-    styleSheet.id = 'sidebar-animations';
-    styleSheet.innerText = `
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    `;
-    document.head.appendChild(styleSheet);
-}
 
 export default SidebarPanel;

@@ -12,7 +12,7 @@ COPY src /app/src
 COPY META-INF ./META-INF
 
 # Build the Project
-RUN mvn -o
+RUN mvn -o compile
 
 # Create Mount Points for the external data
 RUN mkdir -p /data/project \

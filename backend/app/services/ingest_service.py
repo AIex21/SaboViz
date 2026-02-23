@@ -56,6 +56,8 @@ class IngestService:
     def process_m3_file(self, project_id: int, m3_content: dict):
         with SessionLocal() as db:
             repo = GraphRepository(db)
+            from app.services.summarization_service import SummarizationService
+            summarization_service = SummarizationService(db)
 
             try:
                 repo.change_project_status(project_id, "processing", "Transforming M3 Model...")
@@ -66,6 +68,9 @@ class IngestService:
                 lpg_data = builder.export_for_vis()
 
                 nodes_len, edges_len = self.save_graph_data(repo, project_id, lpg_data.get("elements", {}))
+
+                summarization_service.run_summarization(project_id)
+
                 repo.change_project_status(project_id, status="ready", description=f"Imported {nodes_len} nodes and {edges_len} edges successfully.")
 
             except Exception as e:
@@ -74,10 +79,15 @@ class IngestService:
     def ingest_lpg_file(self, project_id: int, lpg_content: dict):
         with SessionLocal() as db:
             repo = GraphRepository(db)
+            from app.services.summarization_service import SummarizationService
+            summarization_service = SummarizationService(db)
 
             try:
                 repo.change_project_status(project_id, "processing", "Importing JSON...")
                 nodes_len, edges_len = self.save_graph_data(repo, project_id, lpg_content.get("elements", {}))
+
+                summarization_service.run_summarization(project_id)
+
                 repo.change_project_status(project_id, status="ready", description=f"Imported {nodes_len} nodes and {edges_len} edges successfully.")
             
             except Exception as e:
@@ -115,4 +125,3 @@ class IngestService:
 
         json_path = rascal_service.get_analysis_file(project_id)
         background_tasks.add_task(self.background_resume_task, project_id, json_path)
-            

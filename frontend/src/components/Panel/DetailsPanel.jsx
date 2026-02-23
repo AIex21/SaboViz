@@ -25,7 +25,8 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
         id, label, simpleName, 
         source, target, 
         breakdown, weight, isAggregated,
-        participating_features
+        participating_features,
+        ai_summary
     } = selectedElement;
 
     // --- CONTEXT ---
@@ -68,7 +69,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
     }
 
     // --- SMART VALUE RENDERER ---
-    const renderValue = (key, val) => {
+    const renderValue = (key, val, isStacked = CSSFontFeatureValuesRule) => {
         if (val === null || val === undefined || val === "") return <span style={{color: '#555'}}>-</span>;
 
         if (typeof val === 'boolean') {
@@ -94,6 +95,15 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
             return <code style={styles.codeBlock}>{val}</code>;
         }
 
+        if (Array.isArray(val)) {
+            if (val.length === 0) return <span style={{fontStyle: 'italic', color: '#667'}}>empty</span>;
+            return (
+                <ul style={{margin: '4px 0 0 0', paddingLeft: '16px', color: '#e0e0e0', fontSize: '12px', textAlign: 'left', width: '100%' }}>
+                    {val.map((item, i) => <li key={i} style={{marginBottom: '4px'}}>{item}</li>)}
+                </ul>
+            )
+        }
+
         if (typeof val === 'object') {
             if (Object.keys(val).length === 0) return <span style={{fontStyle: 'italic', color: '#666'}}>empty</span>;
             return (
@@ -107,7 +117,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
             );
         }
 
-        return <span style={styles.valueText}>{String(val)}</span>;
+        return <span style={{...styles.valueText, textAlign: isStacked ? 'left' : 'right'}}>{String(val)}</span>;
     };
 
     const associatedFeatures = (participating_features || []).map(featId => {
@@ -141,7 +151,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
             </div>
 
             <div style={styles.content}>
-                {/* 1. EDGE CONNECTIONS (Now visible for ALL edges, including Trace) */}
+                {/* EDGE CONNECTIONS (Now visible for ALL edges, including Trace) */}
                 {isEdge && (
                     <div style={styles.section}>
                         <h4 style={styles.sectionTitle}>Connections</h4>
@@ -154,7 +164,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
                     </div>
                 )}
 
-                {/* 2. AGGREGATION */}
+                {/* AGGREGATION */}
                 {isAggregated && breakdown && (
                     <div style={styles.section}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
@@ -179,7 +189,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
                     </div>
                 )}
 
-                {/* 3. PROPERTIES */}
+                {/* PROPERTIES */}
                 {displayProperties && Object.keys(displayProperties).length > 0 && (
                     <div style={styles.section}>
                         <h4 style={styles.sectionTitle}>Properties</h4>
@@ -212,7 +222,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
                     </div>
                 )}
 
-                {/* 4. ID */}
+                {/* ID */}
                 <div style={{...styles.section, borderBottom: 'none', paddingTop: '10px'}}>
                     <div style={styles.row}>
                         <strong style={styles.keyLabel}>System ID:</strong> 
@@ -221,6 +231,24 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
                         </div>
                     </div>
                 </div>
+
+                {/* AI SUMMARY */}
+                {ai_summary && Object.keys(ai_summary).length > 0 && (
+                    <div style={{...styles.section, backgroundColor: 'rgba(139, 92, 246, 0.08)', padding: '12px', borderRadius: '8px', border: `1px solid rgba(139, 92, 246, 0.3)`}}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px'}}>
+                            <span style={{fontSize: '14px'}}>✨</span>
+                            <h4 style={{...styles.sectionTitle, margin: 0, color: '#b197fc'}}>AI Summary</h4>
+                        </div>
+                        {Object.entries(ai_summary).map(([key, value]) => (
+                            <div key={key} style={styles.stackedRow}>
+                                <strong style={{...styles.keyLabel, color: '#b197fc', opacity: 0.8}}>{formatKey(key)}</strong> 
+                                <div style={{width: '100%', marginTop: '2px'}}>
+                                    {renderValue(key, value, true)} {/* Pass true to force left alignment */}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -264,6 +292,11 @@ const styles = {
     row: { 
         display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', 
         padding: '4px 0', gap: '12px' 
+    },
+    stackedRow: {
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+        padding: '6px 0', gap: '4px',
+        borderBottom: '1px dashed rgba(139, 92, 246, 0.2)',
     },
     keyLabel: { 
         color: '#adb5bd', minWidth: '85px', fontWeight: 500, fontSize: '12px',

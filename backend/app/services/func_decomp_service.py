@@ -9,6 +9,7 @@ from app.models.feature import Feature
 from app.repositories.feature_repo import FeatureRepository
 from app.services.trace_service import TraceService
 from app.services.graph_service import GraphService
+from app.services.summarization_service import SummarizationService
 
 class FunctionalDecompositionService:
     def __init__(self, db: Session):
@@ -145,6 +146,9 @@ class FunctionalDecompositionService:
         self.feature_repo.delete_features_by_project(project_id)
         db_nodes = self.graph_service.get_all_nodes(project_id)
         node_lookup = {n.id: n for n in db_nodes}
+
+        summarizer = SummarizationService(self.db)
+        is_llm_enabled = summarizer.llm.is_enabled
         
         for label, indices in clusters.items():
             avg_score = np.mean(idf_scores[indices])
@@ -156,16 +160,26 @@ class FunctionalDecompositionService:
             for uri in components:
                 linked_nodes.append(node_lookup[uri])
 
+            feature_description = None
             if is_infrastructure:
                 category = "Infrastructure"
-                feature_name = "Common_Utils"
+                default_name = "Common Utilities"
             else:
                 category = "Feature"
-                feature_name = f"Feature_{self.generate_feature_name(components)}"
+                default_name = f"Feature_{self.generate_feature_name(components)}"
+
+            if is_llm_enabled and linked_nodes:
+                internal_edges = self.graph_service.get_edges_between_nodes(components)
+                ai_result = summarizer.prompt_feature(linked_nodes, internal_edges)
+                feature_name = ai_result.get("feature_name", default_name)
+                feature_description = ai_result.get("description", None)
+            else:
+                feature_name = default_name
 
             feature = Feature(
                 project_id=project_id,
                 name=feature_name,
+                description=feature_description,
                 category=category,
                 score=float(avg_score)
             )

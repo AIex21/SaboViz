@@ -160,3 +160,22 @@ private ModelContainer loadExtractedModelsFromBinaryFile(loc file) {
 
     return loadedModelContainer;
 }
+
+public void saveMethodSnippetsAsJSON(M3 model, str appName) {
+    map[str, str] snippets = ();
+
+    for (<logical, physical> <- model.functionDefinitions) {
+        try {
+            snippets[logical.uri] = readFile(physical);
+        } catch : {
+            ;
+        }
+    }
+
+    try {
+        writeJSON(|cwd:///| + MODELS_COMPOSED_FOLDER + "<appName>_snippets.json", snippets);
+        println("Successfully wrote <appName>_snippets.json");
+    } catch IO(msg) : {
+        println("[ERROR] Error writing <appName>_snippets.json: <msg>");
+    }
+}

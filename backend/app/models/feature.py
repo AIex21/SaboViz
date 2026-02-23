@@ -14,6 +14,7 @@ class Feature(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String)
+    description = Column(String, nullable=True)
     category = Column(String)
     score = Column(Float)
 

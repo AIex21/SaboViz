@@ -27,6 +27,9 @@ services:
       RASCAL_IMAGE_NAME: "localhost/sabo-rascal-parser:latest"
       SHARED_DATA_VOLUME: sabo_shared_data
       EXTERNAL_LIBS_PATHS: ${EXTERNAL_LIBS_PATHS}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
     volumes:
       - ${PODMAN_SOCKET}:/var/run/docker.sock:Z
       - sabo_shared_data:/sabo-data:Z

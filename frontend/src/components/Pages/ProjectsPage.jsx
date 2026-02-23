@@ -29,7 +29,12 @@ const ProjectsPage = () => {
     }, []);
 
     useEffect(() => {
-        const hasProcessing = projects.some(p => p.status === 'processing' || p.status === 'pending' || p.status === 'decomposing');
+        const hasProcessing = projects.some(p => 
+            p.status === 'processing' || 
+            p.status === 'pending' || 
+            p.status === 'decomposing'||
+            p.status === 'summarizing'
+        );
         
         let intervalId;
         if (hasProcessing) {
@@ -232,7 +237,7 @@ const ProjectsPage = () => {
                             key={p.id} 
                             style={{
                                 ...styles.card, 
-                                opacity: (p.status === 'processing' || p.status === 'decomposing') ? 0.6 : 1,
+                                opacity: (p.status === 'processing' || p.status === 'decomposing' || p.status === 'summarizing') ? 0.6 : 1,
                                 pointerEvents: p.status === 'processing' ? 'none' : 'auto'
                             }} onClick={() => p.status === 'ready' && navigate(`/project/${p.id}`)}>
                             <div style={styles.cardHeader}>
@@ -264,6 +269,7 @@ const ProjectsPage = () => {
                                     }}>
                                         {p.status === 'processing' ? '⚡ PROCESSING...' : 
                                         p.status === 'decomposing' ? '🧩 EXTRACTING...' :
+                                        p.status === 'summarizing' ? '📝 SUMMARIZING...' :
                                         p.status === 'error' ? '⚠ FAILED' : 
                                         p.status === 'unresolved' ? '⚠ ACTION NEEDED' :
                                         '● READY'}
@@ -394,6 +400,7 @@ const getStatusColor = (status) => {
     switch(status) {
         case 'processing': return THEME.warning; // Orange
         case 'decomposing': return THEME.accent;
+        case 'summarizing': return THEME.summarizing;
         case 'error': return THEME.danger;       // Red
         case 'unresolved': return THEME.unresolved;
         default: return THEME.success;           // Green
@@ -404,6 +411,7 @@ const getStatusGradient = (status) => {
     switch(status) {
         case 'processing': return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
         case 'decomposing': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+        case 'summarizing': return 'linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)';
         case 'error': return 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)';
         case 'unresolved': return 'linear-gradient(135deg, #facc15 0%, #ca8a04 100%)';
         default: return 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';

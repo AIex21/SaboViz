@@ -94,24 +94,15 @@ class RascalService:
                 logs = container.logs().decode('utf-8')
                 raise Exception(f"Parser failed with code {result['StatusCode']}.\nLogs:\n{logs[-500:]}")
             
-            bits, stat = container.get_archive("/app/models/composed/FullProject.json")
+            bits_m3, stat_m3 = container.get_archive("/app/models/composed/FullProject.json")
+            m3_path = HOST_DATA_PATH / str(project_id) / "FullProject.json"
+            self.write_tar_to_disk(bits_m3, m3_path, "FullProject.json")
 
-            output_path = HOST_DATA_PATH / str(project_id) / "FullProject.json"
-            temp_tar = HOST_DATA_PATH / str(project_id) / "output.tar"
+            bits_snip, stat_snip = container.get_archive("/app/models/composed/FullProject_snippets.json")
+            snip_path = HOST_DATA_PATH / str(project_id) / "FullProject_snippets.json"
+            self.write_tar_to_disk(bits_snip, snip_path, "FullProject_snippets.json")
 
-            with open(temp_tar, 'wb') as f:
-                for chunk in bits:
-                    f.write(chunk)
-
-            with tarfile.open(temp_tar) as tar:
-                member = tar.getmember("FullProject.json")
-                f = tar.extractfile(member)
-                with open(output_path, "wb") as out:
-                    out.write(f.read())
-
-            os.remove(temp_tar)
-
-            return output_path
+            return m3_path
         
         except docker.errors.ImageNotFound:
             raise Exception("Rascal Parser image not found.")
@@ -138,6 +129,20 @@ class RascalService:
             raise FileNotFoundError(f"Analysis result not found for project {project_id}")
             
         return file_path
+    
+    def write_tar_to_disk(self, bits, output_path, member_name):
+        temp_tar = output_path.with_suffix('.tar')
+
+        with open(temp_tar, 'wb') as f:
+            for chunk in bits:
+                f.write(chunk)
+
+        with tarfile.open(temp_tar) as tar:
+            member = tar.getmember(member_name)
+            f = tar.extractfile(member)
+            with open(output_path, "wb") as out:
+                out.write(f.read())
+        os.remove(temp_tar)
 
 def run_full_analysis_pipeline(project_id: int, rascal_service: RascalService, ingest_service: IngestService):
     with SessionLocal() as db:

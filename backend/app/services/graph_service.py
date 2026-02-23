@@ -60,6 +60,12 @@ class GraphService:
     def get_all_edges(self, project_id: int) -> List[Edge]:
         return self.repo.get_all_edges(project_id)
     
+    def get_edges_between_nodes(self,  node_ids: list[str]):
+        return self.repo.get_edges_between_nodes(node_ids)
+    
+    def update_node(self, node: Node):
+        self.repo.update_node(node)
+    
     def get_aggregated_edges(self, project_id: int, visible_ids: list[str]):
         return self.repo.get_aggregated_edges(project_id, visible_ids)
 

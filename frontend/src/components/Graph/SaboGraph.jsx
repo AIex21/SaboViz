@@ -29,8 +29,11 @@ const SaboGraph = ({
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     
     const [edgeVisibility, setEdgeVisibility] = useState({
-        invokes: true, declares: true, requires: true,
-        specializes: true, instantiates: true, uses: true, typed: true, aggregated: true
+        invokes: true,
+        requires: true,
+        specializes: true, 
+        instantiates: true,
+        aggregated: true
     });
 
     const toggleEdge = (type) => {
@@ -152,18 +155,41 @@ const SaboGraph = ({
     // --- LAYOUT & EVENTS (unchanged) ---
     useEffect(() => {
         if (!cyInstance || elements.length === 0) return;
+
         const runLayout = () => {
              const nodes = cyInstance.nodes();
              const isInitialLoad = nodes.every(n => n.position().x === 0 && n.position().y === 0);
+
              if (isInitialLoad) {
-                cyInstance.layout({ ...layoutOptions, name: 'fcose', fit: true, padding: 50, animate: false, randomize: true }).run();
+                cyInstance.layout({ 
+                    ...layoutOptions, 
+                    name: 'fcose', 
+                    fit: true, 
+                    padding: 50, 
+                    animate: false, 
+                    randomize: true 
+                }).run();
              } else {
                 const unpositioned = nodes.filter(n => n.position().x === 0 && n.position().y === 0);
+
                 if (unpositioned.length > 0) {
-                    const positioned = nodes.not(unpositioned);
-                    positioned.lock();
-                    cyInstance.layout({ ...layoutOptions, fit: false, animate: true, randomize: false }).run();
-                    cyInstance.one('layoutstop', () => positioned.unlock());
+                    unpositioned.forEach(newChild => {
+                        const parentId = newChild.data('parent');
+                        if (parentId) {
+                            const parentNode = cyInstance.getElementById(parentId);
+                            if (parentNode.length > 0) {
+                                newChild.position({ ...parentNode.position() });
+                            }
+                        }
+                    });
+
+                    cyInstance.layout({
+                        ...layoutOptions,
+                        name: 'fcose',
+                        fit: false,
+                        animate: true,
+                        randomize: false
+                    }).run()
                 }
              }
         };

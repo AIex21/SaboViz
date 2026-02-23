@@ -42,6 +42,12 @@ EXTERNAL_LIBS_PATHS=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/T
 # Windows Example: /run/podman/podman.sock
 # Linux Example: /run/user/1000/podman/podman.sock
 PODMAN_SOCKET=/run/podman/podman.sock
+
+#LLM Configuration
+# Use host.docker.internal, if you are using a local LLM, to allow the container to reach the host machine's localhost
+LLM_BASE_URL=http://host.docker.internal:11434/v1/
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5-coder:latest
 ```
 
 ### 3. Choose Your Deployment Mode
@@ -67,20 +73,20 @@ docker-compose up --build
 
 The backend requires a connection to the Podman daemon. You must enable the socket inside the Podman Machine.
 
-* **For Windows Users**:
+* **Windows Users**:
 
     1. Open PowerShell and log into the Podman machine: `podman machine ssh`
     2. Enable the socket inside the VM: `sudo systemctl enable --now podman.socket`
     3. Check the Socket Path: `systemctl status podman.socket` (Output shouls show: `Listen: /run/podman/podman.sock`)
 
-* **For Linux Users**:
+* **Linux Users**:
 
     1. Enable the socket: `systemctl --user enable --now podman.socket`
     2. Check the Socket Path: `systemctl --user status podman.socket`
 
 #### 2. Install Dependencies & Run
 
-* **For Windows Users**: You must run the stack inside the Podman VM so volume mounts resolve correctly.
+* **Windows Users**: You must run the stack inside the Podman VM so volume mounts resolve correctly.
 
     1. SSH into the machine: `podman machine ssh`
     2. Install tools: `sudo dnf install -y python3-pip && pip3 install podman-compose`
@@ -90,7 +96,7 @@ The backend requires a connection to the Podman daemon. You must enable the sock
         podman-compose -f podman-compose.yml up --build
         ```
 
-* **For Linux Users**:
+* **Linux Users**:
 
     1. Install tools: `pip3 install podman-compose`
     2. Run the stack: `podman-compose -f podman-compose.yml up --build`
@@ -113,23 +119,38 @@ Because the compiled environment is large (~ 1.1 GB), it is not stored in the Gi
 ### 2. Deploy
 
 #### 1. Load the pre-build images into your local registry:
-* **For Docker Desktop:**
+* **Docker Desktop:**
     ```bash
     docker load -i sabo-viz-full.tar
     ```
 
-* **For Podman Desktop:**
+* **Podman Desktop:**
     ```bash
     docker load -i sabo-viz-full.tar
     ```
 
 #### 2. Start the application:
-* **For Docker Desktop:**
+* **Docker Desktop:**
     ```bash
     docker-compose -f docker-compose.prod.yml up -d
     ```
 
-* **For Podman Desktop:**
+* **Podman Desktop:**
+    The backend requires a connection to the Podman daemon. You must enable the socket inside the Podman Machine.
+
+    * **For Windows Users**:
+
+        1. Open PowerShell and log into the Podman machine: `podman machine ssh`
+        2. Enable the socket inside the VM: `sudo systemctl enable --now podman.socket`
+        3. Check the Socket Path: `systemctl status podman.socket` (Output shouls show: `Listen: /run/podman/podman.sock`)
+
+    * **For Linux Users**:
+
+        1. Enable the socket: `systemctl --user enable --now podman.socket`
+        2. Check the Socket Path: `systemctl --user status podman.socket`
+
+    Start the aplication:
+
     ```bash
     podman-compose -f podman-compose.prod.yml up -d
     ```

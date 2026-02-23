@@ -74,6 +74,16 @@ class GraphRepository:
         return self.db.query(Edge).filter(
             Edge.project_id == project_id,
             Edge.source_id.in_(node_ids),
+            Edge.target_id.in_(node_ids),
+            not_(Edge.label.in_(['includes', 'contains', 'declares', 'encapsulates', 'encloses', 'uses', 'typed']))
+        ).all()
+    
+    def get_edges_between_nodes(self, node_ids: list[str]):
+        if not node_ids:
+            return []
+        
+        return self.db.query(Edge).filter(
+            Edge.source_id.in_(node_ids),
             Edge.target_id.in_(node_ids)
         ).all()
 
@@ -83,6 +93,10 @@ class GraphRepository:
 
     def bulk_create_edges(self, edges_data: list[dict]):
         self.db.bulk_insert_mappings(Edge, edges_data)
+        self.db.commit()
+
+    def update_node(self, node: Node):
+        self.db.add(node)
         self.db.commit()
 
     def get_batch_hierarchy(self, project_id: int, node_ids: list[str]) -> dict:
@@ -171,6 +185,7 @@ class GraphRepository:
 
                 WHERE e.project_id = :project_id
                     AND src_resolved.vid != tgt_resolved.vid -- Ignore internal connections (self-loops)
+                    AND e.label NOT IN ('includes', 'contains', 'declares', 'encapsulates', 'encloses', 'uses', 'typed') -- Ignore hierarchical edges
             ),
             label_stats AS (
                 SELECT

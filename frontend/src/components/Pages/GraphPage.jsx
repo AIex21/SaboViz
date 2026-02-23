@@ -176,6 +176,7 @@ function GraphPage() {
       id: node.id,
       parent: node.parent_id,
       properties: node.properties,
+      ai_summary: node.ai_summary,
       simpleName: node.properties?.simpleName || node.id,
       label: node.labels ? node.labels[0] : "",
       hasChildren: node.hasChildren,

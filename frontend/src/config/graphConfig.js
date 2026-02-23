@@ -14,6 +14,7 @@ export const THEME = {
     success: '#10b981',      // Success (Green)
     warning: '#f59e0b',      // Warning (Orange)
     unresolved: '#eab308',
+    summarizing: '#0ea5e9',
     accent: '#8b5cf6',       // Purple (for graph nodes)
     overlay: 'rgba(0, 0, 0, 0.5)'
 };
@@ -33,6 +34,7 @@ export const EDGE_COLORS = {
     requires: '#fa5252',    // Red
     specializes: '#be4bdb', // Purple
     instantiates: '#12b886',// Teal
+    aggregated: '#adb5bd',  // Neutral Grey
     uses: '#868e96',        // Grey
     typed: '#e64980'        // Pink
 };

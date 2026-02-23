@@ -13,6 +13,8 @@ class NodeResponse(BaseModel):
     ancestors: List[str] = []
     labels: List[str] = []
     properties: Dict[str, Any] = {}
+    ai_summary: Optional[Dict[str, Any]] = None
+
     hasChildren: bool = False
 
     participating_features: List[int] = []
