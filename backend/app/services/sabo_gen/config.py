@@ -56,4 +56,7 @@ M3_TO_SABO = {
     "cpp+variable": NODE_VARIABLE,
     "cpp+field": NODE_VARIABLE,
     "cpp+parameter": NODE_VARIABLE,
+
+    "ddf+interface": NODE_TYPE,
+    "ddf+method": NODE_OPERATION
 }

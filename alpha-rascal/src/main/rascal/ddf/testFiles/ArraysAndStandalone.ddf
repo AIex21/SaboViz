@@ -1,0 +1,22 @@
+string name[64] ;
+int matrix[10][10] ;
+float samples[*] ;
+Person people[MAX_SIZE] ;
+
+typedef string Email[128]
+set {
+    * = <pattern = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}">;
+} ;
+
+hash(string) StringMap ;
+
+hash(Person) PersonMap <buckets = 128> ;
+
+autounion "get*", "set*", "is*" : void methods ;
+
+attributedef Range int <min = 0, max = 100> ;
+attributedef Pattern string <regex = true> ;
+external RemoteType LocalType ;
+enum2str Color colorToString ;
+enum2desc Priority priorityDescription ;
+typechecksum Message 0x12345678 ;

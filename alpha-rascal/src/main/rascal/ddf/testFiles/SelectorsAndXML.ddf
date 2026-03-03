@@ -1,0 +1,29 @@
+typedef struct {
+    int values[10][10] ;
+} Matrix
+set {
+    values = <default = 0> ;
+    values[0] = <special = true> ;
+    values[*][0] = <readonly = true> ;
+    values[0][*] = <writeonly = true> ;
+} ;
+
+typedef struct {
+    Person members[*] ;
+    string tags[*] ;
+} Group
+set {
+    members.name = <required = true> ;
+    members[0] = <admin = true> ;
+    tags[*] = <unique = true> ;
+} ;
+
+xml_optional typedef struct {
+    optional int id <default = -1> ;
+    xml_optional string description[1024] ;
+    optional Person owner <validate = true> ;
+} Resource ;
+
+autounion "get*", "set*" : void accessors ;
+autounion "load*", "save*", "import*", "export*" : int fileOps ;
+autounion "create*", "destroy*", "init*", "cleanup*" : void lifecycle ;

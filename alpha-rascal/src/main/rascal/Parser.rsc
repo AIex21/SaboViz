@@ -4,10 +4,12 @@ import IO;
 import Set;
 import List;
 import Relation;
+import String;
+import ParseTree;
+import Exception;
 import lang::cpp::M3;
 import lang::cpp::AST;
 import util::FileSystem;
-import String;
 
 // Alpha modules
 import utils::Common;
@@ -16,6 +18,9 @@ import utils::Persistence;
 import utils::Types;
 import utils::PathMapper;
 import utils::LocationInflator;
+
+import ddf::Syntax;
+import ddf::Bridge;
 
 // Configuration variables
 private loc inputFolderAbsolutePath;
@@ -134,7 +139,25 @@ private void processCppFiles(list[loc] cppFilePaths, str appName) {
         println("Processed: <i>/<length>");
     }
     if (composeModels) {
+        println("Composing C++ models...");
         M3 composedModels = composeCppM3(|file:///|, M3Models);
+
+        println("Scanning for DDF files in <inputFolderAbsolutePath>...");
+        list[loc] ddfFiles = findAllDdfFiles(inputFolderAbsolutePath);
+        println("Found <size(ddfFiles)> DDF files.");
+
+        for (loc ddfLoc <- ddfFiles) {
+            try {
+                Tree parseTree = parse(#start[DDFModule], ddfLoc);
+                DDFModule ddfAst = implode(#DDFModule, parseTree);
+                composedModels = stitchDdfToCpp(composedModels, ddfAst);
+            } catch ParseError(loc e): {
+                println("[ERROR] Failed to parse DDF file <ddfLoc> at <e>");
+            } catch e: {
+                println("[ERROR] Unexpected error processing DDF <ddfLoc>: <e>");
+            }
+        }
+
         saveComposedExtractedM3ModelsAsJSON(composedModels, appName);
         saveMethodSnippetsAsJSON(composedModels, appName);
     }
@@ -196,6 +219,14 @@ public list[loc] findAllIncludeDirs(loc rootDirectory) {
     set[loc] includeDirs = { file.parent | loc file <- hFiles };
     
     return toList(includeDirs);
+}
+
+/**
+ * Recursively finds all DDF files in a given directory.
+ */
+public list[loc] findAllDdfFiles(loc rootDirectory) {
+    set[loc] ddfFiles = find(rootDirectory, "ddf");
+    return toList(ddfFiles);
 }
 
 public list[loc] findSystemHeaders(loc vsRoot, loc winKitsRoot) {

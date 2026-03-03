@@ -1,0 +1,31 @@
+interface Calculator {
+    defaulttimeout 1000 ;
+    connectiontimeout 5000 ;
+    function add(in int a, in int b) ;
+    function subtract(in int a, in int b) ;
+}
+
+interface DataService {
+    defaulttimeout 30000 ;
+    connectiontimeout 60000 ;
+    singleton instance ;
+    broker mainBroker ;
+    server 8080, "DataServer" ;
+    fullconst ;
+    simulation ;
+    tracing ;
+    runtimeaccess ;
+    fcn nonblocking function getData(
+        in string key,
+        out Person person,
+        inout int attempts byvalue
+    ) ;
+    throughput event onUpdate(
+        in Message message bydefinition,
+        out int status
+    ) ;
+    trigger onThreshold(
+        in float value,
+        in float threshold notrace
+    ) ;
+}

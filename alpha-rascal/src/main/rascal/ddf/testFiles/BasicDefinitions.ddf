@@ -1,0 +1,10 @@
+sccs_date "2024-03-28" ;
+sccs_version "1.0.0" ;
+xml_schema_uri "http://example.com/schema.xsd" ;
+nocheckvp ;
+const MAX_SIZE = 100 ;
+const FLAG = TRUE | FALSE ;
+const MASK = 0xFF & 0x0F ;
+const SHIFTED = 1 << 8 ;
+const COMPLEX = (1 + 2) * (3 / 4) ;
+const COMBINED = (FLAG & MASK) | SHIFTED ;

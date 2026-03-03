@@ -1,0 +1,28 @@
+typedef enum
+{
+    KEMIxFI:loop_serialize,
+    KEMIxFI:select_resource 
+} KEMIxFI:enum;
+
+enum2str KEMIxFI:enum KEMIxFI:ENUM2STR;
+
+const KEELMIxEXPxCALC:SERVER = "EXPxCALC";
+const KTBSXAxCTL:TPT_BASE = (('K' << 24) | ('T' << 16)) + 0xB100;
+
+interface KEELMIxEXPxCALC
+{
+    fullconst;
+    tracing "KEELMIxEXPxCALC";
+    server  KEELMIxEXPxCALC:SERVER;
+
+    ##! \brief initialize the interface internal information/data
+    function initialize(); 
+
+    ##! \brief Starts the call to the corrections providers
+    defaulttimeout 100;
+    fcn nonblocking
+    function exposure_calculations(
+        in varstring                 image_entity;
+        in KEMIxDOSE:img_dose_data_t image_dose;
+    );
+}

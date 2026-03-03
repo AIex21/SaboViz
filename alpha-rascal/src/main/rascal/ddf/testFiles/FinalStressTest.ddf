@@ -1,0 +1,28 @@
+# 1. Complex Math in Dimensions
+typedef struct {
+    int complex_array[(MAX_SIZE << 2) + (10 / 2)];
+    float multi_dim[10][MAX_SIZE][2];
+} BBCC:StressStruct;
+
+# 2. Empty Block Edge Cases
+interface EmptyService {}
+
+typedef struct {} EmptyData;
+
+# 3. Attributes with Complex Expressions
+attributedef CustomType int <min = (0 + 1), max = MAX_SIZE * 10>;
+
+# 4. Deep Namespacing and CM Expressions
+cmexpression STAGING_ENV = ((env == "test") || (env == "beta")) && (version == "2.0");
+
+# 5. Method with void and No Params
+interface Pingable {
+    tracing;
+    function ping();
+}
+
+# 6. Global Direct Declaration (No typedef)
+BBCC:StressStruct global_state <persistent = true>;
+
+# 7. Nested Parentheses in Const
+const MATH_GOD = ((1 + (2 * (3 + 4))) >> 1) & 0xFF;

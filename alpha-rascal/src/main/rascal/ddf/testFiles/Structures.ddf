@@ -1,0 +1,25 @@
+typedef struct {
+    int id ;
+    string name ;
+} Person ;
+
+typedef struct {
+    optional int id <default = -1> ;
+    string name[64] <default = ""> ;
+    int scores[10] ;
+    Priority priority <default = LOW> ;
+    xml_optional string tags[*] ;
+} Student ;
+
+typedef struct {
+    Person person ;
+    int grades[4] ;
+    string notes[256] ;
+} Record
+set {
+    grades = <default = 0> ;
+    notes = <maxlen = 256> ;
+}
+set (DEBUG == "true") {
+    notes = <trace = true> ;
+} ;

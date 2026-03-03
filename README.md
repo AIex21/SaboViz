@@ -44,7 +44,7 @@ EXTERNAL_LIBS_PATHS=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/T
 PODMAN_SOCKET=/run/podman/podman.sock
 
 # LLM Configuration
-# Use host.docker.internal, if you are using a local LLM, to allow the container to reach the host machine's localhost
+# Use host.docker.internal or host.containers.internal, if you are using a local LLM, to allow the container to reach the host machine's localhost
 LLM_BASE_URL=http://host.docker.internal:11434/v1/
 LLM_API_KEY=ollama
 LLM_MODEL=qwen2.5-coder:latest
@@ -126,13 +126,13 @@ Because the compiled environment is large (~ 1.1 GB), it is not stored in the Gi
 
 * **Podman Desktop:**
     ```bash
-    docker load -i sabo-viz-full.tar
+    podman load -i sabo-viz-full.tar
     ```
 
 #### 2. Start the application:
 * **Docker Desktop:**
     ```bash
-    docker-compose -f docker-compose.prod.yml up -d
+    docker-compose -f docker-compose.prod.yml up
     ```
 
 * **Podman Desktop:**
@@ -152,7 +152,8 @@ Because the compiled environment is large (~ 1.1 GB), it is not stored in the Gi
     Start the aplication:
 
     ```bash
-    podman-compose -f podman-compose.prod.yml up -d
+    cd /mnt/c/Users/YourName/path/to/saboviz
+    podman-compose -f podman-compose.prod.yml up
     ```
 </details>
 

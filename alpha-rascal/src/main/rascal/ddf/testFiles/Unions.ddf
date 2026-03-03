@@ -1,0 +1,21 @@
+typedef union(int) {
+    case RED:
+        float red_value ;
+    case GREEN:
+        float green_value ;
+    case BLUE:
+        float blue_value ;
+    default:
+        int unknown ;
+} ColorValue ;
+
+typedef union(MessageType <default = NONE>) message {
+    case TEXT:
+        string text[1024] <maxlen = 1024> ;
+    case BINARY:
+        int data[*] <compress = true> ;
+    case STRUCTURED:
+        Person person <validate = true> ;
+    default:
+        int reserved ;
+} Message ;
