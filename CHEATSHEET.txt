@@ -1,8 +1,8 @@
 Save images
-docker save -o sabo-viz-full.tar postgres:15 sabo-rascal-parser:latest visualizationtool-backend:latest visualizationtool-frontend:latest
+docker save -o sabo-viz.tar postgres:15 sabo-rascal-parser:latest visualizationtool-backend:latest visualizationtool-frontend:latest
 
 Load images
-podman load -i sabo-viz-full.tar
+podman load -i sabo-viz.tar
 
 Run prod
 podman-compose -f podman-compose.prod.yml up
@@ -27,6 +27,3 @@ podman volume ls
 
 Delete volumes
 podman volume prune     ||  podman volume rm -a
-
-sabo-viz-with-ddf.tar: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQAZe5NYAlpaQp8pSQKNMuSvAaaLNW9EP1jaFKKRAtboVPA?e=VF3Efm
-sabo-viz-without-ddf.tar: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQBnAUMBUlazTYQ2QmflM7kgAbR32T8jROybWMzru9IOqRU?e=LF7aqn

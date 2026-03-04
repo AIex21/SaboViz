@@ -142,21 +142,21 @@ private void processCppFiles(list[loc] cppFilePaths, str appName) {
         println("Composing C++ models...");
         M3 composedModels = composeCppM3(|file:///|, M3Models);
 
-        println("Scanning for DDF files in <inputFolderAbsolutePath>...");
-        list[loc] ddfFiles = findAllDdfFiles(inputFolderAbsolutePath);
-        println("Found <size(ddfFiles)> DDF files.");
+        // println("Scanning for DDF files in <inputFolderAbsolutePath>...");
+        // list[loc] ddfFiles = findAllDdfFiles(inputFolderAbsolutePath);
+        // println("Found <size(ddfFiles)> DDF files.");
 
-        for (loc ddfLoc <- ddfFiles) {
-            try {
-                Tree parseTree = parse(#start[DDFModule], ddfLoc);
-                DDFModule ddfAst = implode(#DDFModule, parseTree);
-                composedModels = stitchDdfToCpp(composedModels, ddfAst);
-            } catch ParseError(loc e): {
-                println("[ERROR] Failed to parse DDF file <ddfLoc> at <e>");
-            } catch e: {
-                println("[ERROR] Unexpected error processing DDF <ddfLoc>: <e>");
-            }
-        }
+        // for (loc ddfLoc <- ddfFiles) {
+        //     try {
+        //         Tree parseTree = parse(#start[DDFModule], ddfLoc);
+        //         DDFModule ddfAst = implode(#DDFModule, parseTree);
+        //         composedModels = stitchDdfToCpp(composedModels, ddfAst);
+        //     } catch ParseError(loc e): {
+        //         println("[ERROR] Failed to parse DDF file <ddfLoc> at <e>");
+        //     } catch e: {
+        //         println("[ERROR] Unexpected error processing DDF <ddfLoc>: <e>");
+        //     }
+        // }
 
         saveComposedExtractedM3ModelsAsJSON(composedModels, appName);
         saveMethodSnippetsAsJSON(composedModels, appName);
@@ -204,19 +204,23 @@ private ModelContainer extractModelsFromCppFile(loc filePath, list[loc] includeF
 public list[loc] findAllCppFiles(loc rootDirectory) {
     // find(loc, str) returns a set[loc] of files with that extension
     set[loc] cppFiles = find(rootDirectory, "cpp");
+    set[loc] cFiles = find(rootDirectory, "c");
     
     // Combine them and convert to a list
-    return toList(cppFiles);
+    return toList(cppFiles + cFiles);
 }
 
 /**
  * Recursively finds all folders that contain header files.
  */
 public list[loc] findAllIncludeDirs(loc rootDirectory) {
-    set[loc] hFiles   = find(rootDirectory, "h");
+    set[loc] hFiles = find(rootDirectory, "h");
+    set[loc] hppFiles = find(rootDirectory, "hpp");
+
+    set[loc] allIncludeFiles = hFiles + hppFiles;
     
     // We only want the folder containing the file, not the file itself
-    set[loc] includeDirs = { file.parent | loc file <- hFiles };
+    set[loc] includeDirs = { file.parent | loc file <- allIncludeFiles };
     
     return toList(includeDirs);
 }

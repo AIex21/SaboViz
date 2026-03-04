@@ -2,9 +2,7 @@
 .env
 
 # Ignore Docker image archives
-sabo-viz-full.tar
-sabo-viz-with-ddf.tar
-sabo-viz-without-ddf.tar
+sabo-viz.tar
 
 # Python Backend
 __pycache__/

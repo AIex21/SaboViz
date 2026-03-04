@@ -48,15 +48,27 @@ M3_TO_SABO = {
     "cpp+template": NODE_TYPE,
     "cpp+enum": NODE_TYPE,
 
+    "c+struct": NODE_TYPE,
+    "c+union": NODE_TYPE,
+    "c+enum": NODE_TYPE,
+    "c+typedef": NODE_TYPE,
+
+    "ddf+interface": NODE_TYPE,
+
     "cpp+function": NODE_OPERATION,
     "cpp+method": NODE_OPERATION,
     "cpp+constructor": NODE_OPERATION,
     "cpp+destructor": NODE_OPERATION,
+
+    "c+function": NODE_OPERATION,
+
+    "ddf+method": NODE_OPERATION,
     
     "cpp+variable": NODE_VARIABLE,
     "cpp+field": NODE_VARIABLE,
     "cpp+parameter": NODE_VARIABLE,
 
-    "ddf+interface": NODE_TYPE,
-    "ddf+method": NODE_OPERATION
+    "c+variable": NODE_VARIABLE,
+    "c+field": NODE_VARIABLE,
+    "c+parameter": NODE_VARIABLE
 }
