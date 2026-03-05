@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import httpx
 from openai import OpenAI
 
 class LLMClient:
@@ -12,9 +13,12 @@ class LLMClient:
         self.is_enabled = bool(self.base_url and self.base_url.strip())
 
         if self.is_enabled:
+            custom_http_client = httpx.Client(verify=False)
+
             self.client = OpenAI(
                 base_url=self.base_url,
-                api_key=self.api_key
+                api_key=self.api_key,
+                http_client=custom_http_client
             )
         else:
             self.client = None
