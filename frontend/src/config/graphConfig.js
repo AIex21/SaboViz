@@ -175,6 +175,18 @@ export const saboStylesheet = [
         }
     },
 
+    {
+        selector: '.Project',
+        style: {
+            'background-color': COLORS.folder,
+            'shape': 'round-rectangle',
+            'width': 28,
+            'height': 22,
+            'border-width': 1,
+            'border-color': 'rgba(255,255,255,0.25)'
+        }
+    },
+
     // ================================================================
     // 3. CONTAINER STATES (Overrides for Parents)
     // ================================================================

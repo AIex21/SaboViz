@@ -8,7 +8,11 @@ class SaboGraphBuilder:
         self.nodes = {}
         self.edges = set()
 
-        # self.add_node("ROOT_PROJECT", NODE_PROJECT, {"simpleName": project_name})
+        self.add_node("ROOT_PROJECT", NODE_PROJECT, {
+            "simpleName": project_name,
+            "fullPath": "/",
+            "sabo_def": NODE_PROJECT
+        })
     
     def add_node(self, uid, label, props = None):
         if uid in self.nodes:
@@ -53,8 +57,10 @@ class SaboGraphBuilder:
             if scheme != "file":
                 continue
 
+            source_relative_path = strip_parser_workspace_prefix(path)
+
             # Normalize path and check for duplicates
-            norm_path = normalize_path(path)
+            norm_path = normalize_path(source_relative_path)
             if norm_path in seen_paths:
                 continue
             seen_paths.add(norm_path)
@@ -64,21 +70,21 @@ class SaboGraphBuilder:
             # Create FILE node
             self.add_node(file_id, NODE_FILE, {
                 "simpleName": name, 
-                "fullPath": path,
+                "fullPath": source_relative_path,
                 "sabo_def": NODE_FILE
             })
 
             # Create FOLDER structure
-            parts = path.strip("/").split("/")
+            parts = source_relative_path.strip("/").split("/")
 
-            current_parent = None
+            current_parent = "ROOT_PROJECT"
 
             path_accumulator = ""
 
             # Build folder hierarchy
             for part in parts[:-1]: # Exclude the file itself
                 path_accumulator += "/" + part
-                folder_id = f"folder::{path_accumulator}"
+                folder_id = f"folder::{normalize_path(path_accumulator)}"
 
                 # Add folder node
                 self.add_node(folder_id, NODE_FOLDER, {
