@@ -260,17 +260,21 @@ class SummarizationService:
     def prompt_feature(self, nodes: list[Node], edges: list[Edge], is_infrastructure=False) -> dict:
         prompt = "Analyze the following cluster of tightly coupled software operations that make up a distinct software feature.\n\n"
         prompt += "CRITICAL INSTRUCTION: Name the feature based strictly on the exact operations present. Do not imply the existence of a broader system. If the cluster only lists or reads data, the name must reflect 'Listing' or 'Retrieval', not general 'Management'.\n\n"
-        prompt += "The feature name MUST follow this format: [Specific Action/Verb] + [Entity] + [Context].\n"
-        prompt += "Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.\n\n"
+        prompt += "The description MUST explicitly state what this cluster includes (key operation groups or responsibilities), not only what it does.\n\n"
         
         if is_infrastructure:
-            prompt += "NOTE: This cluster is a cross-cutting **Infrastructure Feature**.\n"
-            prompt += "Determine its exact technical or framework-level purpose.\n"
+            prompt += "NOTE: This cluster is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple parts of the codebase.\n"
+            prompt += "Name format for infrastructure: [Scope/Qualifier] + [Shared Capability].\n"
+            prompt += "Examples: 'Common Utilities', 'Shared Infrastructure Utilities', 'Cross-Cutting Runtime Utilities', 'Core Validation Utilities'.\n"
+            prompt += "The description should start with 'Includes:' and then list the concrete utilities/capabilities represented by the operations.\n"
         else:
-            prompt += "NOTE: This cluster is a domain-specific **Business Feature**.\n"
+            prompt += "NOTE: This cluster is a domain-specific Business Feature.\n"
             prompt += "Determine its exact business capability or user-facing workflow.\n"
+            prompt += "Name format for business features: [Specific Action/Verb] + [Entity] + [Context].\n"
+            prompt += "Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.\n"
+            prompt += "Avoid generic infrastructure-style names like 'Common Utilities' for business clusters.\n"
             
-        prompt += "### Operations in this Feature Cluster:\n"
+        prompt += "### Operations in this Cluster:\n"
 
         node_lookup = {}
         for node in nodes:

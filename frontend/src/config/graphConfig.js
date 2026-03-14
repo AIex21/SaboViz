@@ -206,8 +206,6 @@ export const saboStylesheet = [
             'border-style': 'dashed', 
             'border-color': '#5c5f66',
             
-            'width': 'auto',
-            'height': 'auto',
             'padding': '12px',
             'z-index': 1
         }
@@ -252,7 +250,6 @@ export const saboStylesheet = [
             'border-width': 2,
             'border-color': '#fff',
             'border-style': 'solid',
-            'shadow-blur': 15,
             'shadow-color': THEME.primary,
             'shadow-opacity': 0.6,
             'z-index': 999
@@ -399,6 +396,25 @@ export const saboStylesheet = [
             'z-index': 1000,
             'transition-property': 'border-color, shadow-opacity, shadow-blur',
             'transition-duration': '0.2s'
+        }
+    },
+    {
+        selector: 'node.edge-focus-root',
+        style: {
+            'border-width': 4,
+            'border-color': '#16a34a',
+            'border-style': 'double',
+            'z-index': 1001
+        }
+    },
+    {
+        selector: 'edge.edge-focus-edge',
+        style: {
+            'width': 3.2,
+            'line-color': '#16a34a',
+            'target-arrow-color': '#16a34a',
+            'opacity': 1,
+            'z-index': 1000
         }
     }
 ];

@@ -17,7 +17,7 @@ const CODE_KEYS = new Set([
 
 const STATUS_KEYS = new Set(['Message', 'message', 'status', 'error']);
 
-const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, activeTraceAction, features = [] }) => {
+const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [] }) => {
     
     if (!selectedElement) return null;
 
@@ -33,7 +33,8 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
     const isTraceEdge = id === 'trace-ghost-edge';
     const isEdge = source && target;
     const isNode = !isEdge && !isAggregated;
-    const isLocked = lockedNodeIds && id ? lockedNodeIds.has(id) : false;
+    const isLocked = lockedNodeIds && id ? lockedNodeIds.has(String(id)) : false;
+    const isEdgeFocused = edgeFocusNodeIds && id ? edgeFocusNodeIds.has(String(id)) : false;
 
     // --- PREPARE PROPERTIES ---
     let displayProperties = selectedElement.properties || {};
@@ -135,16 +136,28 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, a
 
                 <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
                     {isNode && (
-                        <button
-                            onClick={() => onToggleLock(id)}
-                            style={{
-                                ...styles.headerBtn,
-                                background: isLocked ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.1)',
-                                border: isLocked ? `1px solid ${THEME.primary}` : 'none'
-                            }}
-                            title={isLocked ? "Unlock" : "Lock"}>
-                            {isLocked ? "🔓" : "🔒"}
-                        </button>
+                        <>
+                            <button
+                                onClick={() => onToggleEdgeFocus && onToggleEdgeFocus(id)}
+                                style={{
+                                    ...styles.headerBtn,
+                                    background: isEdgeFocused ? 'rgba(34, 211, 238, 0.3)' : 'rgba(255,255,255,0.1)',
+                                    border: isEdgeFocused ? '1px solid #22d3ee' : 'none'
+                                }}
+                                title={isEdgeFocused ? "Disable edge focus" : "Show only incoming/outgoing edges"}>
+                                ↔
+                            </button>
+                            <button
+                                onClick={() => onToggleLock(id)}
+                                style={{
+                                    ...styles.headerBtn,
+                                    background: isLocked ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.1)',
+                                    border: isLocked ? `1px solid ${THEME.primary}` : 'none'
+                                }}
+                                title={isLocked ? "Unlock" : "Lock"}>
+                                {isLocked ? "🔓" : "🔒"}
+                            </button>
+                        </>
                     )}
                 </div>
                 <button onClick={onClose} style={styles.closeBtn}>×</button>

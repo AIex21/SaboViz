@@ -276,15 +276,6 @@ const ProjectsPage = () => {
                                     </span>
                                 </div>
 
-                                {p.status === 'unresolved' && (
-                                    <button
-                                        onClick={(e) => handleOpenUnresolved(e, p)}
-                                        style={styles.actionNeededBtn}
-                                    >
-                                        View Details
-                                    </button>
-                                )}
-
                                 {p.description && (
                                     <p style={{fontSize: '11px', color: '#667', marginTop: '10px', lineHeight: '1.4'}}>
                                         {p.description.length > 50 ? p.description.substring(0,50) + '...' : p.description}
@@ -297,7 +288,12 @@ const ProjectsPage = () => {
                                     {p.status === 'ready' ? (
                                         <span style={styles.openLink}>Open Workspace →</span>
                                     ): p.status === 'unresolved' ? (
-                                        <span style={{fontSize: '12px', color: '#eab308'}}>Action Required</span>
+                                        <button
+                                            onClick={(e) => handleOpenUnresolved(e, p)}
+                                            style={styles.actionNeededBtn}
+                                        >
+                                            View Details
+                                        </button>
                                     ) : (
                                         <span style={{fontSize: '12px', color: '#667'}}>Please wait...</span>
                                     )}
@@ -654,8 +650,9 @@ const styles = {
         backgroundColor: '#eab308',
         color: '#000',
         border: 'none',
-        padding: '4px 12px',
-        borderRadius: '20px',
+        height: '28px',
+        padding: '0 10px',
+        borderRadius: '6px',
         fontSize: '11px',
         fontWeight: '700',
         cursor: 'pointer',

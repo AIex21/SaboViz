@@ -20,6 +20,8 @@ const SaboGraph = ({
     onToggleLock, 
     lockedNodeIds, 
     lockedScopeIds,
+    onToggleEdgeFocus,
+    edgeFocusNodeIds,
     hierarchyMap,
     features,
     activeFeatureIds,
@@ -191,7 +193,7 @@ const SaboGraph = ({
             const oldGhost = cyInstance.getElementById(GHOST_EDGE_ID);
             if (oldGhost.length > 0) cyInstance.remove(oldGhost);
             
-            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim lock-root lock-scope');
+            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim lock-root lock-scope edge-focus-root edge-focus-edge');
 
             // 2. FEATURE HIGHLIGHTING
             if (activeFeatureIds && activeFeatureIds.size > 0) {
@@ -232,6 +234,24 @@ const SaboGraph = ({
                 });
             }
 
+            // 2.6 EDGE FOCUS STYLING
+            if (edgeFocusNodeIds && edgeFocusNodeIds.size > 0) {
+                cyInstance.nodes().forEach((node) => {
+                    const nodeId = String(node.id());
+                    if (edgeFocusNodeIds.has(nodeId)) {
+                        node.addClass('edge-focus-root');
+                    }
+                });
+
+                cyInstance.edges().forEach((edge) => {
+                    const src = String(edge.data('source'));
+                    const tgt = String(edge.data('target'));
+                    if (edgeFocusNodeIds.has(src) || edgeFocusNodeIds.has(tgt)) {
+                        edge.addClass('edge-focus-edge');
+                    }
+                });
+            }
+
             // 3. TRACE HIGHLIGHTING (Fixed)
             if (activeNodeId && sourceNodeId) {
                 // Use the helper to resolve IDs to what is actually on screen
@@ -265,7 +285,7 @@ const SaboGraph = ({
             }
         });
 
-    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, elements, hierarchyMap, lockedScopeIds, lockedNodeIds]); 
+    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, elements, hierarchyMap, lockedScopeIds, lockedNodeIds, edgeFocusNodeIds]); 
 
     // --- LAYOUT & EVENTS ---
     useEffect(() => {
@@ -473,6 +493,8 @@ const SaboGraph = ({
                 onClose={() => setSelectedElement(null)}
                 onToggleLock={onToggleLock}
                 lockedNodeIds={lockedNodeIds}
+                onToggleEdgeFocus={onToggleEdgeFocus}
+                edgeFocusNodeIds={edgeFocusNodeIds}
                 activeTraceAction={currentAction}
                 features={features}
             />

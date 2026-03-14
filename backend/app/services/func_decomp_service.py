@@ -170,7 +170,7 @@ class FunctionalDecompositionService:
 
             if is_llm_enabled and linked_nodes:
                 internal_edges = self.graph_service.get_edges_between_nodes(components)
-                ai_result = summarizer.prompt_feature(linked_nodes, internal_edges)
+                ai_result = summarizer.prompt_feature(linked_nodes, internal_edges, is_infrastructure)
                 feature_name = ai_result.get("feature_name", default_name)
                 feature_description = ai_result.get("description", None)
             else:

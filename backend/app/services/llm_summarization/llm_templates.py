@@ -125,12 +125,13 @@ folder_schema = {
             "type": "string",
             "description": "Describe the architectural role of this folder. Is it a feature subsystem, a utility library, or a configuration directory?"
         },
-        "architectural_layer": {
-            "type": "string",
-            "description": "Guess the architectural layer (e.g., 'UI', 'Business Logic', 'Data Access', 'Utility')."
+        "key_contents": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List 2 to 5 important capabilities or functionalities contained in this folder."
         }
     },
-    "required": ["description", "architectural_layer"],
+    "required": ["description", "key_contents"],
     "additionalProperties": False
 }
 

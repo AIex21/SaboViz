@@ -61,6 +61,7 @@ function GraphPage() {
   const [projectName, setProjectName] = useState("Loading...");
   const [projectStatus, setProjectStatus] = useState("ready");
   const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
+  const [edgeFocusNodeIds, setEdgeFocusNodeIds] = useState(new Set());
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set());
   const [loadedParentIds, setLoadedParentIds] = useState(new Set());
 
@@ -109,6 +110,7 @@ function GraphPage() {
         }
 
         setGraphElements(sanitizeEdgesByPresentNodes(mergeUniqueElements(initialElements)));
+        setEdgeFocusNodeIds(new Set());
         setExpandedNodeIds(new Set());
         setLoadedParentIds(new Set());
       } catch (error) {
@@ -425,6 +427,19 @@ function GraphPage() {
     });
   };
 
+  const toggleEdgeFocus = (nodeId) => {
+    setEdgeFocusNodeIds((prev) => {
+      const next = new Set(prev);
+      const nodeIdStr = String(nodeId);
+      if (next.has(nodeIdStr)) {
+        next.delete(nodeIdStr);
+      } else {
+        next.add(nodeIdStr);
+      }
+      return next;
+    });
+  };
+
   const visibleElements = useMemo(() => {
     const { nodes, edges } = splitElements(graphElements);
     const visibleNodeIdSet = getVisibleNodeIds(graphElements, expandedNodeIds);
@@ -454,8 +469,16 @@ function GraphPage() {
       });
     }
 
+    if (edgeFocusNodeIds.size > 0) {
+      filteredEdges = filteredEdges.filter((e) => {
+        const src = String(e.data.source);
+        const tgt = String(e.data.target);
+        return edgeFocusNodeIds.has(src) || edgeFocusNodeIds.has(tgt);
+      });
+    }
+
     return sanitizeEdgesByPresentNodes([...filteredNodes, ...filteredEdges]);
-  }, [graphElements, expandedNodeIds, lockedNodeIds]);
+  }, [graphElements, expandedNodeIds, lockedNodeIds, edgeFocusNodeIds]);
 
   const lockedScopeIds = useMemo(() => {
     if (lockedNodeIds.size === 0) return new Set();
@@ -472,6 +495,24 @@ function GraphPage() {
 
     return scope;
   }, [graphElements, lockedNodeIds]);
+
+  const edgeFocusNeighborIds = useMemo(() => {
+    if (edgeFocusNodeIds.size === 0) return new Set();
+
+    const ids = new Set(edgeFocusNodeIds);
+    visibleElements.forEach((el) => {
+      if (!el.data.source) return;
+      const src = String(el.data.source);
+      const tgt = String(el.data.target);
+
+      if (edgeFocusNodeIds.has(src) || edgeFocusNodeIds.has(tgt)) {
+        ids.add(src);
+        ids.add(tgt);
+      }
+    });
+
+    return ids;
+  }, [visibleElements, edgeFocusNodeIds]);
 
   // --- NEW: Calculate Stats Dynamically ---
     const stats = useMemo(() => {
@@ -519,6 +560,13 @@ function GraphPage() {
                 <button onClick={() => setLockedNodeIds(new Set())} style={styles.unlockBtn}>✕</button>
               </div>
             )}
+
+            {edgeFocusNodeIds.size > 0 && (
+              <div style={styles.lockedBadge}>
+                <span>↔ {edgeFocusNodeIds.size} Edge Focus</span>
+                <button onClick={() => setEdgeFocusNodeIds(new Set())} style={styles.unlockBtn}>✕</button>
+              </div>
+            )}
         </div>
         
         {/* --- RIGHT SIDE: STATS --- */}
@@ -554,6 +602,9 @@ function GraphPage() {
           onToggleLock={toggleLock}
           lockedNodeIds={lockedNodeIds}
           lockedScopeIds={lockedScopeIds}
+          onToggleEdgeFocus={toggleEdgeFocus}
+          edgeFocusNodeIds={edgeFocusNodeIds}
+          edgeFocusNeighborIds={edgeFocusNeighborIds}
           hierarchyMap={hierarchyMap}
           features={features}
           activeFeatureIds={activeFeatureIds}
