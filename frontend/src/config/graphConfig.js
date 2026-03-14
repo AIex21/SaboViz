@@ -57,11 +57,11 @@ export const layoutOptions = {
     nodeDimensionsIncludeLabels: true, 
     uniformNodeDimensions: false,
     packComponents: true,   
-    nodeRepulsion: 6500,    
-    idealEdgeLength: 80,   
+    nodeRepulsion: 9000,
+    idealEdgeLength: 95,
     edgeElasticity: 0.45,
     nestingFactor: 0.1,     
-    gravity: 0.25,
+    gravity: 0.18,
     numIter: 2500,
     tile: true,             
     tilingPaddingVertical: 20,
@@ -347,7 +347,7 @@ export const saboStylesheet = [
     {
         selector: '.feature-dim',
         style: {
-            'opacity': 0.1, // Dim nodes that aren't part of the feature
+            'opacity': 0.35, // Keep context visible while still de-emphasizing non-feature elements
             'transition-property': 'opacity',
             'transition-duration': '0.3s'
         }
@@ -372,6 +372,33 @@ export const saboStylesheet = [
             'line-color': '#8b5cf6',
             'target-arrow-color': '#8b5cf6',
             'z-index': 999
+        }
+    },
+    {
+        selector: 'node.lock-scope',
+        style: {
+            'border-width': 2,
+            'border-color': '#22d3ee',
+            'border-style': 'solid',
+            'shadow-blur': 10,
+            'shadow-color': '#22d3ee',
+            'shadow-opacity': 0.28,
+            'transition-property': 'border-color, shadow-opacity, shadow-blur',
+            'transition-duration': '0.2s'
+        }
+    },
+    {
+        selector: 'node.lock-root',
+        style: {
+            'border-width': 4,
+            'border-color': '#06b6d4',
+            'border-style': 'double',
+            'shadow-blur': 18,
+            'shadow-color': '#06b6d4',
+            'shadow-opacity': 0.5,
+            'z-index': 1000,
+            'transition-property': 'border-color, shadow-opacity, shadow-blur',
+            'transition-duration': '0.2s'
         }
     }
 ];

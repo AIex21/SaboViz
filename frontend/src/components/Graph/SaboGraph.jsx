@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
@@ -16,8 +16,10 @@ const SaboGraph = ({
     sourceNodeId, 
     currentAction, 
     onToggleExpand, 
+    onPositionsSnapshot,
     onToggleLock, 
     lockedNodeIds, 
+    lockedScopeIds,
     hierarchyMap,
     features,
     activeFeatureIds,
@@ -27,6 +29,8 @@ const SaboGraph = ({
     const [selectedElement, setSelectedElement] = useState(null);
     const [cyInstance, setCyInstance] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const hasInitialLayoutRunRef = useRef(false);
+    const knownNodeIdsRef = useRef(new Set());
     
     const [edgeVisibility, setEdgeVisibility] = useState({
         invokes: true,
@@ -38,6 +42,106 @@ const SaboGraph = ({
 
     const toggleEdge = (type) => {
         setEdgeVisibility(prev => ({...prev, [type]: !prev[type]}));
+    };
+
+    const exportNodePositions = () => {
+        if (!cyInstance) return {};
+
+        const positions = {};
+        cyInstance.nodes().forEach(node => {
+            positions[node.id()] = { ...node.position() };
+        });
+
+        return positions;
+    };
+
+    const resolveOverlaps = (nodesCollection, fixedNodeIds = new Set()) => {
+        if (!nodesCollection || nodesCollection.length < 2) return;
+
+        const visibleNodes = nodesCollection.filter((n) => n.visible());
+        if (visibleNodes.length < 2) return;
+
+        const groupsByParent = new Map();
+        visibleNodes.forEach((node) => {
+            // Group by parent so overlap resolution happens among siblings (same level).
+            const parentId = node.data('parent');
+            const levelKey = parentId != null ? String(parentId) : '__root__';
+
+            if (!groupsByParent.has(levelKey)) groupsByParent.set(levelKey, []);
+            groupsByParent.get(levelKey).push(node);
+        });
+
+        const maxIterations = 8;
+        const padding = 12;
+        const maxPush = 24;
+        const maxGroupSize = 180;
+
+        cyInstance.batch(() => {
+            groupsByParent.forEach((group) => {
+                // Include leaves and expanded containers as collision bodies.
+                const colliders = group.filter((n) => n.children().length === 0 || n.data('expanded') === true);
+                if (colliders.length < 2 || colliders.length > maxGroupSize) return;
+
+                for (let iter = 0; iter < maxIterations; iter++) {
+                    let movedAny = false;
+
+                    for (let i = 0; i < colliders.length; i++) {
+                        const a = colliders[i];
+                        const aPos = a.position();
+                        const aW = a.outerWidth();
+                        const aH = a.outerHeight();
+
+                        for (let j = i + 1; j < colliders.length; j++) {
+                            const b = colliders[j];
+                            const bPos = b.position();
+                            const bW = b.outerWidth();
+                            const bH = b.outerHeight();
+
+                            const minDx = (aW + bW) / 2 + padding;
+                            const minDy = (aH + bH) / 2 + padding;
+                            const dx = bPos.x - aPos.x;
+                            const dy = bPos.y - aPos.y;
+
+                            if (Math.abs(dx) >= minDx || Math.abs(dy) >= minDy) continue;
+
+                            const overlapX = minDx - Math.abs(dx);
+                            const overlapY = minDy - Math.abs(dy);
+
+                            let pushX = 0;
+                            let pushY = 0;
+
+                            if (overlapX < overlapY) {
+                                const sign = dx === 0 ? ((a.id() < b.id()) ? -1 : 1) : Math.sign(dx);
+                                pushX = (overlapX / 2) * sign;
+                            } else {
+                                const sign = dy === 0 ? ((a.id() < b.id()) ? -1 : 1) : Math.sign(dy);
+                                pushY = (overlapY / 2) * sign;
+                            }
+
+                            // Clamp displacement to prevent oscillation/explosions.
+                            pushX = Math.max(-maxPush, Math.min(maxPush, pushX));
+                            pushY = Math.max(-maxPush, Math.min(maxPush, pushY));
+
+                            const aFixed = fixedNodeIds.has(a.id());
+                            const bFixed = fixedNodeIds.has(b.id());
+
+                            if (!aFixed && !bFixed) {
+                                a.position({ x: aPos.x - pushX, y: aPos.y - pushY });
+                                b.position({ x: bPos.x + pushX, y: bPos.y + pushY });
+                            } else if (!aFixed && bFixed) {
+                                a.position({ x: aPos.x - 2 * pushX, y: aPos.y - 2 * pushY });
+                            } else if (aFixed && !bFixed) {
+                                b.position({ x: bPos.x + 2 * pushX, y: bPos.y + 2 * pushY });
+                            }
+
+                            movedAny = true;
+                        }
+                    }
+
+                    if (!movedAny) break;
+                }
+            });
+        });
     };
 
     const elements = useMemo(() => {
@@ -54,7 +158,6 @@ const SaboGraph = ({
     }, [data, edgeVisibility]);
 
     // --- HELPER: Find the Visible Ancestor ---
-    // (This was missing! It finds the folder if the method is hidden)
     const getVisibleNodeId = (targetId) => {
         if (!targetId || !cyInstance) return null;
 
@@ -88,7 +191,7 @@ const SaboGraph = ({
             const oldGhost = cyInstance.getElementById(GHOST_EDGE_ID);
             if (oldGhost.length > 0) cyInstance.remove(oldGhost);
             
-            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim');
+            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim lock-root lock-scope');
 
             // 2. FEATURE HIGHLIGHTING
             if (activeFeatureIds && activeFeatureIds.size > 0) {
@@ -113,6 +216,18 @@ const SaboGraph = ({
                     const tgt = edge.target();
                     if (!src.hasClass('feature-dim') && !tgt.hasClass('feature-dim')) {
                         edge.removeClass('feature-dim').addClass('feature-highlight');
+                    }
+                });
+            }
+
+            // 2.5 LOCK FOCUS STYLING
+            if (lockedScopeIds && lockedScopeIds.size > 0) {
+                cyInstance.nodes().forEach(node => {
+                    const nodeId = String(node.id());
+                    if (lockedNodeIds && lockedNodeIds.has(nodeId)) {
+                        node.addClass('lock-root');
+                    } else if (lockedScopeIds.has(nodeId)) {
+                        node.addClass('lock-scope');
                     }
                 });
             }
@@ -150,52 +265,152 @@ const SaboGraph = ({
             }
         });
 
-    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, elements, hierarchyMap]); 
+    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, elements, hierarchyMap, lockedScopeIds, lockedNodeIds]); 
 
-    // --- LAYOUT & EVENTS (unchanged) ---
+    // --- LAYOUT & EVENTS ---
     useEffect(() => {
         if (!cyInstance || elements.length === 0) return;
 
         const runLayout = () => {
              const nodes = cyInstance.nodes();
-             const isInitialLoad = nodes.every(n => n.position().x === 0 && n.position().y === 0);
+             if (nodes.length === 0) return;
 
-             if (isInitialLoad) {
-                cyInstance.layout({ 
+             const previousNodeIds = knownNodeIdsRef.current;
+             const currentNodeIds = new Set(nodes.map(n => n.id()));
+             const retainedCount = nodes.filter(n => previousNodeIds.has(n.id())).length;
+             const newNodes = nodes.filter(n => !previousNodeIds.has(n.id()));
+
+             if (!hasInitialLayoutRunRef.current || retainedCount === 0) {
+                const initialLayout = cyInstance.layout({ 
                     ...layoutOptions, 
                     name: 'fcose', 
                     fit: true, 
                     padding: 50, 
                     animate: false, 
                     randomize: true 
-                }).run();
-             } else {
-                const unpositioned = nodes.filter(n => n.position().x === 0 && n.position().y === 0);
+                });
 
-                if (unpositioned.length > 0) {
-                    unpositioned.forEach(newChild => {
-                        const parentId = newChild.data('parent');
-                        if (parentId) {
-                            const parentNode = cyInstance.getElementById(parentId);
-                            if (parentNode.length > 0) {
-                                newChild.position({ ...parentNode.position() });
-                            }
-                        }
+                initialLayout.on('layoutstop', () => {
+                    resolveOverlaps(cyInstance.nodes());
+                    knownNodeIdsRef.current = new Set(cyInstance.nodes().map(n => n.id()));
+                    if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
+                });
+
+                initialLayout.run();
+                hasInitialLayoutRunRef.current = true;
+                return;
+             }
+
+             if (newNodes.length > 0) {
+                const byParent = new Map();
+                newNodes.forEach((node) => {
+                    const parentId = node.data('parent');
+                    if (!parentId) return;
+                    if (!byParent.has(parentId)) byParent.set(parentId, []);
+                    byParent.get(parentId).push(node);
+                });
+
+                byParent.forEach((children, parentId) => {
+                    const parentNode = cyInstance.getElementById(parentId);
+                    if (parentNode.length === 0) return;
+
+                    const anchor = parentNode.position();
+                    // Seed in a spiral around parent so fCoSE starts from a non-degenerate state.
+                    children.forEach((child, idx) => {
+                        const seedAngle = idx * 2.399963229728653; // golden angle
+                        const seedRadius = 28 + Math.sqrt(idx + 1) * 22;
+                        child.position({
+                            x: anchor.x + Math.cos(seedAngle) * seedRadius,
+                            y: anchor.y + Math.sin(seedAngle) * seedRadius,
+                        });
                     });
 
-                    cyInstance.layout({
+                    const childrenCollection = cyInstance.collection(children);
+                    const regionNodes = childrenCollection.union(parentNode);
+                    const regionIds = new Set(regionNodes.map((n) => n.id()));
+                    const regionEdges = cyInstance.edges().filter((edge) => {
+                        const src = edge.source().id();
+                        const tgt = edge.target().id();
+                        return regionIds.has(src) && regionIds.has(tgt) && !edge.data('isAggregated');
+                    });
+
+                    // Structural parent-child edges are hidden in data, so add temporary guide edges
+                    // to give fCoSE distance constraints. Also add a lightweight chain to avoid center clumping.
+                    const starGuideEdges = children.map((child, idx) => ({
+                        group: 'edges',
+                        data: {
+                            id: `__layout_guide__${parentId}__${child.id()}__${idx}__${Date.now()}`,
+                            source: parentId,
+                            target: child.id(),
+                            isLayoutGuide: true,
+                        },
+                    }));
+
+                    const chainGuideEdges = children.slice(1).map((child, idx) => ({
+                        group: 'edges',
+                        data: {
+                            id: `__layout_chain__${parentId}__${children[idx].id()}__${child.id()}__${Date.now()}`,
+                            source: children[idx].id(),
+                            target: child.id(),
+                            isLayoutGuide: true,
+                        },
+                    }));
+
+                    const guideEdges = [...starGuideEdges, ...chainGuideEdges];
+
+                    const addedGuideEdges = cyInstance.add(guideEdges);
+                    addedGuideEdges.style({
+                        opacity: 0,
+                        width: 0.001,
+                        'target-arrow-shape': 'none',
+                        events: 'no',
+                    });
+
+                    const localLayout = regionNodes.union(regionEdges).union(addedGuideEdges).layout({
                         ...layoutOptions,
                         name: 'fcose',
                         fit: false,
                         animate: true,
-                        randomize: false
-                    }).run()
-                }
+                        animationDuration: 320,
+                        randomize: false,
+                        quality: 'draft',
+                        numIter: 1200,
+                        idealEdgeLength: 200,
+                        nodeRepulsion: 26000,
+                        gravity: 0.04,
+                        nestingFactor: 0.03,
+                        fixedNodeConstraint: [{ nodeId: parentId, position: { ...anchor } }],
+                    });
+
+                    localLayout.on('layoutstop', () => {
+                        cyInstance.remove(addedGuideEdges);
+                        const bb = regionNodes.boundingBox();
+                        const margin = 140;
+                        const nearbyNodes = cyInstance.nodes().filter((n) => {
+                            const p = n.position();
+                            return (
+                                p.x >= bb.x1 - margin &&
+                                p.x <= bb.x2 + margin &&
+                                p.y >= bb.y1 - margin &&
+                                p.y <= bb.y2 + margin
+                            );
+                        });
+
+                        resolveOverlaps(regionNodes.union(nearbyNodes), new Set([parentId]));
+                        if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
+                    });
+
+                    localLayout.run();
+                });
              }
+
+             knownNodeIdsRef.current = currentNodeIds;
+             if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
         };
+
         const timer = setTimeout(runLayout, 100);
         return () => clearTimeout(timer);
-    }, [cyInstance, elements]);
+    }, [cyInstance, elements, onPositionsSnapshot]);
 
     useEffect(() => {
         if (!cyInstance) return;
@@ -204,15 +419,33 @@ const SaboGraph = ({
             else setSelectedElement(e.target.data());
         };
         const handleDoubleTap = (e) => {
-             if (e.target.isNode() && onToggleExpand) onToggleExpand(e.target.id());
+             if (e.target.isNode() && onToggleExpand) {
+                if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
+                onToggleExpand(e.target.id());
+             }
+        };
+        const handleDragFree = (e) => {
+            if (e.target && e.target.isNode && e.target.isNode()) {
+                const movedNode = e.target;
+                const movedPos = movedNode.position();
+                const nearby = cyInstance.nodes().filter((n) => {
+                    if (n.id() === movedNode.id()) return true;
+                    const p = n.position();
+                    return Math.hypot(p.x - movedPos.x, p.y - movedPos.y) <= 280;
+                });
+                resolveOverlaps(nearby, new Set([movedNode.id()]));
+            }
+            if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
         };
         cyInstance.on('tap', handleTap);
         cyInstance.on('dbltap', 'node', handleDoubleTap);
+        cyInstance.on('dragfree', 'node', handleDragFree);
         return () => {
             cyInstance.removeListener('tap', handleTap);
             cyInstance.removeListener('dbltap', 'node', handleDoubleTap);
+            cyInstance.removeListener('dragfree', 'node', handleDragFree);
         };
-    }, [cyInstance, onToggleExpand]);
+    }, [cyInstance, onToggleExpand, onPositionsSnapshot]);
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative', background: THEME.bg }}>
@@ -230,7 +463,7 @@ const SaboGraph = ({
                 elements={elements}
                 style={{ width: '100%', height: '100%' }}
                 stylesheet={saboStylesheet}
-                layout={layoutOptions} 
+                layout={{ name: 'preset' }} 
                 cy={setCyInstance}
                 minZoom={0.1}
                 maxZoom={3}

@@ -162,8 +162,8 @@ class GraphRepository:
                     END as group_label
                     
                 FROM edges e
-                JOIN nodes ns ON e.source_id = ns.id
-                JOIN nodes nt ON e.target_id = nt.id
+                JOIN nodes ns ON e.source_id = ns.id AND ns.project_id = e.project_id
+                JOIN nodes nt ON e.target_id = nt.id AND nt.project_id = e.project_id
                     
                 -- 1. Resolve Source 
                 CROSS JOIN LATERAL (

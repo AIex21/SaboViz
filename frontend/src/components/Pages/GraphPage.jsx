@@ -8,6 +8,48 @@ import { useToast } from "../../context/ToastContext";
 
 const BUFFER_SIZE = 100;
 
+const elementKey = (el) => {
+  if (!el?.data?.source) return `n:${String(el?.data?.id)}`;
+  if (el.data.id != null && el.data.id !== "") return `e:${String(el.data.id)}`;
+  return `e:${String(el.data.source)}->${String(el.data.target)}:${String(el.data.label || "")}`;
+};
+
+const mergeUniqueElements = (...lists) => {
+  const merged = new Map();
+  lists.flat().forEach((el) => {
+    if (!el || !el.data) return;
+    merged.set(elementKey(el), el);
+  });
+  return Array.from(merged.values());
+};
+
+const splitElements = (elements) => {
+  const nodes = [];
+  const edges = [];
+
+  elements.forEach((el) => {
+    if (el?.data?.source) edges.push(el);
+    else nodes.push(el);
+  });
+
+  return { nodes, edges };
+};
+
+const isAggregatedEdge = (edge) => Boolean(edge?.data?.isAggregated || edge?.classes === "aggregated");
+
+const sanitizeEdgesByPresentNodes = (elements) => {
+  const { nodes, edges } = splitElements(elements);
+  const nodeIds = new Set(nodes.map((n) => String(n.data.id)));
+
+  const safeEdges = edges.filter((e) => {
+    const src = String(e?.data?.source);
+    const tgt = String(e?.data?.target);
+    return nodeIds.has(src) && nodeIds.has(tgt);
+  });
+
+  return [...nodes, ...safeEdges];
+};
+
 function GraphPage() {
   const { showToast } = useToast();
   const { id } = useParams();
@@ -19,6 +61,8 @@ function GraphPage() {
   const [projectName, setProjectName] = useState("Loading...");
   const [projectStatus, setProjectStatus] = useState("ready");
   const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
+  const [expandedNodeIds, setExpandedNodeIds] = useState(new Set());
+  const [loadedParentIds, setLoadedParentIds] = useState(new Set());
 
   // Feature State
   const [features, setFeatures] = useState([]);
@@ -31,6 +75,7 @@ function GraphPage() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [hierarchyMap, setHierarchyMap] = useState({});
   const isFetchingHierarchy = useRef(false);
+  const nodePositionsRef = useRef({});
 
   // Data Loading
   useEffect(() => {
@@ -63,7 +108,9 @@ function GraphPage() {
           }
         }
 
-        setGraphElements(initialElements);
+        setGraphElements(sanitizeEdgesByPresentNodes(mergeUniqueElements(initialElements)));
+        setExpandedNodeIds(new Set());
+        setLoadedParentIds(new Set());
       } catch (error) {
         console.error("Error loading graph data:", error);
         setProjectName("Error Loading Project");
@@ -171,19 +218,25 @@ function GraphPage() {
     bufferHierarchy();
   }, [currentStepIndex, traceSteps, hierarchyMap, projectId]);
 
-  const formatNode = (node) => ({
-    data: {
-      id: node.id,
-      parent: node.parent_id,
-      properties: node.properties,
-      ai_summary: node.ai_summary,
-      simpleName: node.properties?.simpleName || node.id,
-      label: node.labels ? node.labels[0] : "",
-      hasChildren: node.hasChildren,
-      participating_features: node.participating_features || []
-    },
-    classes: node.labels ? node.labels[0] : "",
-  });
+  const formatNode = (node, fallbackPosition = null) => {
+    const cachedPosition = nodePositionsRef.current[String(node.id)] || fallbackPosition;
+
+    return {
+      data: {
+        id: node.id,
+        parent: node.parent_id,
+        properties: node.properties,
+        ai_summary: node.ai_summary,
+        simpleName: node.properties?.simpleName || node.id,
+        label: node.labels ? node.labels[0] : "",
+        hasChildren: node.hasChildren,
+        expanded: expandedNodeIds.has(String(node.id)),
+        participating_features: node.participating_features || []
+      },
+      ...(cachedPosition ? { position: cachedPosition } : {}),
+      classes: node.labels ? node.labels[0] : "",
+    };
+  };
 
   const formatEdge = (edge) => ({
     data: {
@@ -195,19 +248,63 @@ function GraphPage() {
     classes: edge.label,
   });
 
+  const handlePositionsSnapshot = (positionsById) => {
+    nodePositionsRef.current = positionsById || {};
+  };
+
+  const getVisibleNodeIds = (elements, expandedSet) => {
+    const { nodes } = splitElements(elements);
+    const nodeById = new Map(nodes.map((n) => [String(n.data.id), n]));
+    const visible = new Set();
+
+    nodes.forEach((node) => {
+      let currentParentId = node.data.parent != null ? String(node.data.parent) : null;
+      let isVisible = true;
+
+      while (currentParentId) {
+        if (!expandedSet.has(currentParentId)) {
+          isVisible = false;
+          break;
+        }
+
+        const parentNode = nodeById.get(currentParentId);
+        currentParentId = parentNode?.data?.parent != null ? String(parentNode.data.parent) : null;
+      }
+
+      if (isVisible) visible.add(String(node.data.id));
+    });
+
+    return visible;
+  };
+
+  const mergeAggregatedEdges = (elements, aggregatedEdges, allowedNodeIds = null) => {
+    const withoutAggregated = elements.filter((el) => !(el.data.source && isAggregatedEdge(el)));
+    const validAggregated = (aggregatedEdges || []).filter((edge) => {
+      const src = String(edge?.data?.source);
+      const tgt = String(edge?.data?.target);
+      if (!src || !tgt || src === tgt) return false;
+      if (!allowedNodeIds) return true;
+      return allowedNodeIds.has(src) && allowedNodeIds.has(tgt);
+    });
+
+    return sanitizeEdgesByPresentNodes(mergeUniqueElements(withoutAggregated, validAggregated));
+  };
+
   const getDescendantIds = (rootId, elements) => {
+    const root = String(rootId);
     const descendants = new Set();
-    const stack = [rootId];
+    const stack = [root];
 
     while (stack.length > 0) {
       const currentId = stack.pop();
       const children = elements.filter(el =>
-        el.data.parent === currentId && !descendants.has(el.data.id)
+        String(el.data.parent) === currentId && !descendants.has(String(el.data.id))
       );
 
       children.forEach(child => {
-        descendants.add(child.data.id);
-        stack.push(child.data.id);
+        const childId = String(child.data.id);
+        descendants.add(childId);
+        stack.push(childId);
       });
     }
     return descendants;
@@ -217,108 +314,98 @@ function GraphPage() {
   // This function is passed down to SaboGraph to be called on double-click
   const handleNodeExpand = async (nodeId) => {
     try {
-      const targetNode = graphElements.find(el => el.data.id === nodeId);
+      const nodeIdStr = String(nodeId);
+      const targetNode = graphElements.find(el => !el.data.source && String(el.data.id) === nodeIdStr);
       if (!targetNode) return;
 
-      // ==========================================
-      // 1. COLLAPSE LOGIC
-      // ==========================================
-      if (targetNode.data.expanded) {
-        const idsToRemove = getDescendantIds(nodeId, graphElements);
-        
-        // Remove descendants and edges connected to them
-        const nextElements = graphElements.filter(el => {
-          if (idsToRemove.has(el.data.id)) return false;
-          if (el.data.source && (idsToRemove.has(el.data.source) || idsToRemove.has(el.data.target))) return false;
-          return true;
-        }).map(el =>
-          el.data.id === nodeId ? {
-            ...el,
-            data: { ...el.data, expanded: false}
-          } : el);
+      const wasExpanded = expandedNodeIds.has(nodeIdStr);
+      const nextExpanded = new Set(expandedNodeIds);
 
-        const newVisibleIds = nextElements.filter(el => !el.data.source).map(el => el.data.id);
-        const aggData = await projectApi.getAggregatedEdges(projectId, newVisibleIds);
+      if (wasExpanded) {
+        nextExpanded.delete(nodeIdStr);
 
-        // Filter Aggregates (Simple check: no self-loops)
-        // We don't check 'newChildIds' here because we aren't adding any.
-        const validAggregates = (aggData.edges || []).filter(edge => 
-             String(edge.data.source) !== String(edge.data.target)
-        );
-
-        const finalElements = [
-          ...nextElements.filter(el => !el.data.isAggregated),
-          ...validAggregates
-        ];
-
-        setGraphElements(finalElements);
-        return;
+        // Cascade collapse: when a parent collapses, all its loaded descendants collapse too.
+        const { nodes: allNodes } = splitElements(graphElements);
+        const descendants = getDescendantIds(nodeIdStr, allNodes);
+        descendants.forEach((descId) => {
+          nextExpanded.delete(String(descId));
+        });
+      } else {
+        nextExpanded.add(nodeIdStr);
       }
 
-      // ==========================================
-      // 2. EXPAND LOGIC
-      // ==========================================
-      const childData = await projectApi.getChildren(projectId, nodeId);
+      let nextElements = graphElements;
 
-      if (!childData.nodes || childData.nodes.length === 0) return;
+      // Lazy-load children exactly once for each parent.
+      if (!wasExpanded && !loadedParentIds.has(nodeIdStr)) {
+        const childData = await projectApi.getChildren(projectId, nodeId);
 
-      // A. Define Nodes & IDs FIRST (so we can use them in filters)
-      const allNodes = childData.nodes.map(n => formatNode(n));
-      const newChildIds = allNodes.map(n => n.data.id); 
+        if (childData.nodes && childData.nodes.length > 0) {
+          const parentPos = nodePositionsRef.current[nodeIdStr] || null;
+          const allNodes = childData.nodes.map((n, index) => {
+            const cachedPos = nodePositionsRef.current[String(n.id)];
+            if (cachedPos) return formatNode(n, cachedPos);
 
-      // B. Filter Real Edges (Structural)
-      // Hide edges connecting the Parent to its new Children (Vertical noise)
-      const allRealEdges = (childData.edges || []).map(e => formatEdge(e)).filter(edge => {
-          const src = String(edge.data.source);
-          const tgt = String(edge.data.target);
-          const parentId = String(nodeId);
+            if (!parentPos) return formatNode(n);
 
-          const isParentToChild = (src === parentId && newChildIds.includes(tgt));
-          const isChildToParent = (tgt === parentId && newChildIds.includes(src));
+            const idHash = Array.from(String(n.id)).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+            const angle = (idHash % 360) * (Math.PI / 180);
+            const radius = 110 + ((index % 6) * 28);
 
-          if (isParentToChild || isChildToParent) return false;
-          return true;
+            return formatNode(n, {
+              x: parentPos.x + Math.cos(angle) * radius,
+              y: parentPos.y + Math.sin(angle) * radius,
+            });
+          });
+
+          const newChildIds = new Set(allNodes.map((n) => String(n.data.id)));
+          const allRealEdges = (childData.edges || [])
+            .map((e) => formatEdge(e))
+            .filter((edge) => {
+              const src = String(edge.data.source);
+              const tgt = String(edge.data.target);
+              const isParentToChild = src === nodeIdStr && newChildIds.has(tgt);
+              const isChildToParent = tgt === nodeIdStr && newChildIds.has(src);
+              return !isParentToChild && !isChildToParent;
+            });
+
+          nextElements = mergeUniqueElements(nextElements, allNodes, allRealEdges);
+        }
+
+        setLoadedParentIds((prev) => {
+          const next = new Set(prev);
+          next.add(nodeIdStr);
+          return next;
+        });
+      }
+
+      // Keep expanded flag in node data as a style hint for container rendering.
+      nextElements = nextElements.map((el) => {
+        if (el.data.source) return el;
+        const id = String(el.data.id);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            expanded: nextExpanded.has(id),
+          },
+        };
       });
 
-      // C. Fetch & Filter Aggregated Edges
-      const currentVisibleIds = graphElements.filter(el => !el.data.source).map(el => el.data.id);
-      const combinedVisibleIds = [...currentVisibleIds, ...newChildIds];
-      const aggData = await projectApi.getAggregatedEdges(projectId, combinedVisibleIds);
+      setExpandedNodeIds(nextExpanded);
 
-      const validAggregates = (aggData.edges || []).filter(edge => {
-          const src = String(edge.data.source);
-          const tgt = String(edge.data.target);
-          const parentId = String(nodeId);
+      const visibleNodeIdSet = getVisibleNodeIds(nextElements, nextExpanded);
+      const visibleNodeIds = Array.from(visibleNodeIdSet);
+      let reconciledElements = nextElements;
 
-          // No Self Loops
-          if (src === tgt) return false;
+      if (visibleNodeIds.length > 0) {
+        const aggData = await projectApi.getAggregatedEdges(projectId, visibleNodeIds);
+        reconciledElements = mergeAggregatedEdges(nextElements, aggData.edges || [], visibleNodeIdSet);
+      } else {
+        reconciledElements = nextElements.filter((el) => !(el.data.source && isAggregatedEdge(el)));
+      }
 
-          // No Vertical Aggregates (Parent <-> New Child)
-          const isParentToChild = (src === parentId && newChildIds.includes(tgt));
-          const isChildToParent = (tgt === parentId && newChildIds.includes(src));
-
-          if (isParentToChild || isChildToParent) return false;
-
-          return true;
-      });
-
-      // D. Update State
-      setGraphElements(prevElements => {
-        const updatedPrevElements = prevElements.map(el =>
-          el.data.id === nodeId
-          ? { ...el, data: { ...el.data, expanded: true }}
-          : el
-        );
-
-        const cleanPrevElements = updatedPrevElements.filter(el => !el.data.isAggregated);
-
-        return [
-          ...cleanPrevElements,
-          ...allNodes,
-          ...allRealEdges,
-          ...validAggregates
-        ];
-      })
+      setGraphElements(sanitizeEdgesByPresentNodes(reconciledElements));
 
     } catch (error) {
       console.error("Error expanding node:", error);
@@ -328,38 +415,70 @@ function GraphPage() {
   const toggleLock = (nodeId) => {
     setLockedNodeIds(prev => {
       const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
+      const nodeIdStr = String(nodeId);
+      if (next.has(nodeIdStr)) {
+        next.delete(nodeIdStr);
       } else {
-        next.add(nodeId);
+        next.add(nodeIdStr);
       }
       return next;
     });
   };
 
   const visibleElements = useMemo(() => {
-    if (lockedNodeIds.size === 0) return graphElements;
+    const { nodes, edges } = splitElements(graphElements);
+    const visibleNodeIdSet = getVisibleNodeIds(graphElements, expandedNodeIds);
 
-    const lockedScope = new Set();
-
-    lockedNodeIds.forEach(rootId => {
-      lockedScope.add(rootId);
-      const descendants = getDescendantIds(rootId, graphElements);
-      descendants.forEach(d => lockedScope.add(d));
+    let filteredNodes = nodes.filter((n) => visibleNodeIdSet.has(String(n.data.id)));
+    let filteredEdges = edges.filter((e) => {
+      const src = String(e.data.source);
+      const tgt = String(e.data.target);
+      return visibleNodeIdSet.has(src) && visibleNodeIdSet.has(tgt);
     });
 
-    return graphElements.filter(el => {
-      if (!el.data.source) return true;
-      return lockedScope.has(el.data.source) && lockedScope.has(el.data.target);
+    if (lockedNodeIds.size > 0) {
+      const lockedScope = new Set();
+
+      lockedNodeIds.forEach((rootId) => {
+        const rootStr = String(rootId);
+        lockedScope.add(rootStr);
+        const descendants = getDescendantIds(rootStr, nodes);
+        descendants.forEach((d) => lockedScope.add(String(d)));
+      });
+
+      // Keep all visible nodes, only constrain edges to the locked scope.
+      filteredEdges = filteredEdges.filter((e) => {
+        const src = String(e.data.source);
+        const tgt = String(e.data.target);
+        return lockedScope.has(src) && lockedScope.has(tgt);
+      });
+    }
+
+    return sanitizeEdgesByPresentNodes([...filteredNodes, ...filteredEdges]);
+  }, [graphElements, expandedNodeIds, lockedNodeIds]);
+
+  const lockedScopeIds = useMemo(() => {
+    if (lockedNodeIds.size === 0) return new Set();
+
+    const { nodes } = splitElements(graphElements);
+    const scope = new Set();
+
+    lockedNodeIds.forEach((rootId) => {
+      const rootStr = String(rootId);
+      scope.add(rootStr);
+      const descendants = getDescendantIds(rootStr, nodes);
+      descendants.forEach((d) => scope.add(String(d)));
     });
+
+    return scope;
   }, [graphElements, lockedNodeIds]);
 
   // --- NEW: Calculate Stats Dynamically ---
-  const stats = useMemo(() => {
-      const nodes = graphElements.filter(el => !el.data.source).length;
-      const edges = graphElements.length - nodes;
+    const stats = useMemo(() => {
+      const nodes = visibleElements.filter(el => !el.data.source).length;
+      const edges = visibleElements.length - nodes;
       return { nodes, edges };
-  }, [visibleElements]);
+    }, [visibleElements]);
 
   const graphData = useMemo(() => ({ elements: visibleElements }), [visibleElements]);
 
@@ -428,11 +547,13 @@ function GraphPage() {
         <SaboGraph
           data={graphData}
           onToggleExpand={handleNodeExpand}
+          onPositionsSnapshot={handlePositionsSnapshot}
           activeNodeId={activeTargetId}
           sourceNodeId={activeSourceId}
           currentAction={currentActionData}
           onToggleLock={toggleLock}
           lockedNodeIds={lockedNodeIds}
+          lockedScopeIds={lockedScopeIds}
           hierarchyMap={hierarchyMap}
           features={features}
           activeFeatureIds={activeFeatureIds}
