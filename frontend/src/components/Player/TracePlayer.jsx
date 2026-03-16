@@ -26,10 +26,6 @@ const TracePlayer = ({
     return () => clearInterval(interval);
   }, [isPlaying, currentStep, totalSteps, onStepChange]);
 
-  const handleSliderChange = (e) => {
-    onStepChange(Number(e.target.value));
-  };
-
   return (
     <div style={styles.container(isCollapsed)}>
       {/* Header / Collapse Bar */}

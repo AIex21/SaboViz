@@ -70,6 +70,25 @@ class TraceEntry:
             clean_name = clean_name[:32] + "..."
                 
         return clean_name
+
+    def get_scope_qualifiers(self) -> List[str]:
+        scoped_name = self.function_name
+
+        # Strip argument list and common qualifiers while keeping namespace/class scopes.
+        if "(" in scoped_name:
+            scoped_name = scoped_name.split("(")[0]
+
+        scoped_name = scoped_name.replace("virtual ", "").replace("const ", "").strip()
+
+        if "::" not in scoped_name:
+            return []
+
+        parts = [part.strip() for part in scoped_name.split("::") if part.strip()]
+        if len(parts) <= 1:
+            return []
+
+        # Everything before the final function token is qualifier context.
+        return parts[:-1]
     
     def get_display_parameters(self):
         if not self.message:
@@ -202,6 +221,9 @@ class TraceParser:
             line_number=line_num
         )
 
+        # Keep scope context for ambiguity resolution before collapsing to simple function name.
+        entry.scope_qualifiers = entry.get_scope_qualifiers()
+
         entry.function_name = entry.get_clean_function_name()
 
         return entry
@@ -231,6 +253,7 @@ class SequenceBuilder:
                 "step": len(self.sequence) + 1,
                 "type": event_type,
                 "function": func,
+                "scopeQualifiers": getattr(entry, "scope_qualifiers", []),
                 "parameters": entry.get_display_parameters(),
                 "timestamp": entry.timestamp,
                 "depth": depth,

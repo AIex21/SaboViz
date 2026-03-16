@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.exceptions import TraceValidationError
 from app.services.trace_service import TraceService
 from app.services.graph_service import GraphService
 from app.schemas.graph_schemas import TraceSummary
@@ -52,6 +53,8 @@ def upload_trace(
     
     try:
         return service.process_trace_file(project_id, file)
+    except TraceValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Trace processing failed: {str(e)}")
     
@@ -61,7 +64,9 @@ def delete_trace(
     service: TraceService = Depends(get_trace_service)
 ):
     try:
-        service.repo.delete_trace(trace_id)
+        service.delete_trace(trace_id)
         return {"detail": "Trace deleted successfully"}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete trace: {str(e)}")

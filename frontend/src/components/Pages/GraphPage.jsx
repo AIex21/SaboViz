@@ -181,7 +181,7 @@ function GraphPage() {
       })
       .filter((idx) => idx !== -1);
   }, [traceSteps]);
-  
+
   useEffect(() => {
     if (!traceSteps || traceSteps.length === 0) return;
 

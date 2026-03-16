@@ -1,0 +1,2 @@
+class TraceValidationError(Exception):
+    pass

@@ -2,7 +2,14 @@ import React from 'react';
 import { THEME } from '../../config/graphConfig';
 import ModalButton from '../Common/ModalButton';
 
-const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+const ConfirmationModal = ({
+    isOpen,
+    title,
+    message,
+    onConfirm,
+    onCancel,
+    confirmLabel = 'Delete Project'
+}) => {
     if (!isOpen) return null;
 
     return (
@@ -29,7 +36,7 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
                         variant="danger" 
                         onClick={onConfirm}
                     >
-                        Delete Project
+                        {confirmLabel}
                     </ModalButton>
                 </div>
             </div>

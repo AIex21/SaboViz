@@ -12,15 +12,33 @@ class TraceRepository:
     def get_trace_by_id(self, trace_id: int):
         return self.db.query(Trace).filter(Trace.id == trace_id).first()
 
-    def create_trace(self, project_id: int, name: str, description: str, trace_seq_path: str):
+    def create_trace(
+        self,
+        project_id: int,
+        name: str,
+        description: str,
+        trace_seq_path: str,
+        total_steps: int = 0,
+        resolved_steps: int = 0,
+        ambiguous_steps: int = 0,
+        unmapped_steps: int = 0,
+        commit: bool = True,
+    ):
         trace = Trace(
             project_id=project_id,
             name=name,
             description=description,
-            trace_seq_path=trace_seq_path
+            trace_seq_path=trace_seq_path,
+            total_steps=total_steps,
+            resolved_steps=resolved_steps,
+            ambiguous_steps=ambiguous_steps,
+            unmapped_steps=unmapped_steps,
         )
         self.db.add(trace)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(trace)
         return trace
     

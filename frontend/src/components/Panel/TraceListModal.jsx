@@ -47,14 +47,26 @@ const TraceListModal = ({ project, onClose }) => {
         try {
             await projectApi.deleteTrace(traceToDelete.id);
             setTraces(prev => prev.filter(t => t.id !== traceToDelete.id));
+
             setIsDeleteModalOpen(false);
             setTraceToDelete(null);
             showToast("Trace deleted successfully", "success");
         } catch (error) {
             console.error("Failed to delete trace:", error);
-            const msg = err.response?.data?.detail || "Failed to delete trace";
+            const msg = error.response?.data?.detail || "Failed to delete trace";
             showToast(msg, "error");
         }
+    }
+
+    const getTotalSteps = (trace) => {
+        if (typeof trace.total_steps === 'number') {
+            return trace.total_steps;
+        }
+        return (
+            (trace.resolved_steps || 0) +
+            (trace.ambiguous_steps || 0) +
+            (trace.unmapped_steps || 0)
+        );
     }
 
     return (
@@ -97,14 +109,21 @@ const TraceListModal = ({ project, onClose }) => {
                                     <div style={styles.itemContent}>
                                         <div style={styles.itemName}>{trace.name}</div>
                                         <div style={styles.itemMeta}>
-                                            <span style={{fontFamily: 'monospace'}}>{trace.description}</span>
-                                            <span style={styles.dot}>•</span>
                                             <span>{new Date(trace.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <div style={styles.metricsRow}>
+                                            <span style={styles.metricChipNeutral}>Steps {getTotalSteps(trace)}</span>
+                                            <span style={styles.metricChipSuccess}>Resolved {trace.resolved_steps || 0}</span>
+                                            <span style={styles.metricChipWarn}>Ambiguous {trace.ambiguous_steps || 0}</span>
+                                            <span style={styles.metricChipDanger}>Unmapped {trace.unmapped_steps || 0}</span>
                                         </div>
                                     </div>
 
                                     <button 
-                                        onClick={() => handleRequestDelete(trace)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRequestDelete(trace);
+                                        }}
                                         style={styles.deleteBtn}
                                         title="Delete Trace"
                                     >
@@ -127,6 +146,7 @@ const TraceListModal = ({ project, onClose }) => {
                 isOpen={isDeleteModalOpen}
                 title="Delete Trace?"
                 message={`Are you sure you want to delete the trace "${traceToDelete?.name}"? This cannot be undone.`}
+                confirmLabel="Delete Trace"
                 onConfirm={handleConfirmDelete}
                 onCancel={() => setIsDeleteModalOpen(false)}
             />
@@ -192,7 +212,44 @@ const styles = {
     itemMeta: {
         color: THEME.textMuted, fontSize: '12px', display: 'flex', alignItems: 'center'
     },
-    dot: { margin: '0 8px', opacity: 0.5 },
+    metricsRow: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '6px',
+        marginTop: '8px'
+    },
+    metricChipNeutral: {
+        fontSize: '11px',
+        color: THEME.textMain,
+        border: `1px solid ${THEME.border}`,
+        padding: '2px 7px',
+        borderRadius: '999px',
+        background: 'rgba(255,255,255,0.03)'
+    },
+    metricChipSuccess: {
+        fontSize: '11px',
+        color: '#16a34a',
+        border: '1px solid rgba(22, 163, 74, 0.5)',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        background: 'rgba(22, 163, 74, 0.12)'
+    },
+    metricChipWarn: {
+        fontSize: '11px',
+        color: '#d97706',
+        border: '1px solid rgba(217, 119, 6, 0.5)',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        background: 'rgba(217, 119, 6, 0.14)'
+    },
+    metricChipDanger: {
+        fontSize: '11px',
+        color: '#dc2626',
+        border: '1px solid rgba(220, 38, 38, 0.5)',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        background: 'rgba(220, 38, 38, 0.14)'
+    },
     deleteBtn: {
         background: 'transparent',
         border: 'none',

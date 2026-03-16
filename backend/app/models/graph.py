@@ -63,6 +63,10 @@ class Trace(Base):
     name = Column(String, index=True)
     description = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    total_steps = Column(Integer, nullable=False, default=0)
+    resolved_steps = Column(Integer, nullable=False, default=0)
+    ambiguous_steps = Column(Integer, nullable=False, default=0)
+    unmapped_steps = Column(Integer, nullable=False, default=0)
 
     trace_seq_path = Column(String)
 

@@ -115,17 +115,51 @@ class GraphRepository:
         return hierarchy
 
     def get_operation_map(self, project_id: int) -> dict:
-        results = (self.db.query(Node.id, Node.properties)
+        all_nodes = (self.db.query(Node.id, Node.properties)
+                        .filter(Node.project_id == project_id)
+                        .all())
+
+        name_by_id = {}
+        for row in all_nodes:
+            props = row.properties or {}
+            simple_name = props.get("simpleName")
+            if simple_name:
+                name_by_id[row.id] = simple_name
+            else:
+                name_by_id[row.id] = str(row.id).split("/")[-1]
+
+        results = (self.db.query(Node.id, Node.properties, Node.ancestors)
                         .filter(Node.project_id == project_id,
                                 Node.labels.contains(['Operation']))
                         .all())
+
+        def _tokenize(value: str) -> set[str]:
+            text = str(value or "")
+            for separator in ["::", "/", "\\", ".", "-", "_"]:
+                text = text.replace(separator, " ")
+            return {token.lower() for token in text.split() if token}
         
         lookup = {}
         for row in results:
-            node_id = row.id 
-            props = row.properties
+            node_id = row.id
+            props = row.properties or {}
             if props and "simpleName" in props:
-                lookup[props["simpleName"]] = node_id
+                simple_name = props["simpleName"]
+                if simple_name not in lookup:
+                    lookup[simple_name] = []
+
+                ancestor_names = []
+                ancestor_tokens = set()
+                for ancestor_id in (row.ancestors or []):
+                    ancestor_name = name_by_id.get(ancestor_id, str(ancestor_id))
+                    ancestor_names.append(ancestor_name)
+                    ancestor_tokens.update(_tokenize(ancestor_name))
+
+                lookup[simple_name].append({
+                    "id": node_id,
+                    "ancestorNames": ancestor_names,
+                    "ancestorTokens": sorted(ancestor_tokens),
+                })
 
         return lookup
 

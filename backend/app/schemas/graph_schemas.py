@@ -51,6 +51,10 @@ class TraceSummary(BaseModel):
     name: str
     description: Optional[str] = None
     created_at: Optional[datetime] = None
+    total_steps: int = 0
+    resolved_steps: int = 0
+    ambiguous_steps: int = 0
+    unmapped_steps: int = 0
 
     class Config:
         from_attributes = True
