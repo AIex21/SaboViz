@@ -27,3 +27,7 @@ podman volume ls
 
 Delete volumes
 podman volume prune     ||  podman volume rm -a
+
+Stopping and Deleting everything
+podman stop -a
+podman system prune -a --volumes -f
