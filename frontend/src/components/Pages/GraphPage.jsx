@@ -661,6 +661,11 @@ function GraphPage() {
           features={features}
           activeFeatureIds={activeFeatureIds}
           onFeatureToggle={handleFeatureToggle}
+          currentTrace={currentTraceObj}
+          traceSteps={traceSteps}
+          currentStep={currentStepIndex}
+          onStepChange={setCurrentStepIndex}
+          failureIndices={failureIndices}
           isDecomposing={projectStatus === 'decomposing'}
           isProjectSummarizing={projectStatus === 'summarizing'}
           onSummarizeNode={handleSummarizeNode}
@@ -670,6 +675,7 @@ function GraphPage() {
       <TracePlayer
         traces={availableTraces}
         currentTrace={currentTraceObj}
+        traceSteps={traceSteps}
         onSelectTrace={handleSelectTrace}
         currentStep={currentStepIndex}
         totalSteps={traceSteps.length}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { THEME } from "../../config/graphConfig";
 
 const TracePlayer = ({
   traces,
   currentTrace,
+  traceSteps = [],
   onSelectTrace,
   currentStep,
   totalSteps,
@@ -12,6 +13,21 @@ const TracePlayer = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [showAmbiguousMarkers, setShowAmbiguousMarkers] = useState(false);
+  const [showUnmappedMarkers, setShowUnmappedMarkers] = useState(false);
+
+  const { ambiguousIndices, unmappedIndices } = useMemo(() => {
+    const ambiguous = [];
+    const unmapped = [];
+
+    traceSteps.forEach((step, index) => {
+      const status = String(step?.data?.properties?.operationResolution || "").toLowerCase();
+      if (status === "ambiguous") ambiguous.push(index);
+      if (status === "unmapped") unmapped.push(index);
+    });
+
+    return { ambiguousIndices: ambiguous, unmappedIndices: unmapped };
+  }, [traceSteps]);
 
   // Auto-play logic
   useEffect(() => {
@@ -118,10 +134,51 @@ const TracePlayer = ({
                     onClick={() => onStepChange(idx)}
                     style={{
                       ...styles.errorMarker,
-                      left: `${(idx / (totalSteps - 1)) * 100}%`,
+                      left: `${(idx / Math.max(1, totalSteps - 1)) * 100}%`,
                     }}
                   />
                 ))}
+                {showAmbiguousMarkers && ambiguousIndices.map((idx) => (
+                  <div
+                    key={`ambiguous_${idx}`}
+                    title={`Ambiguous at step ${idx + 1}`}
+                    onClick={() => onStepChange(idx)}
+                    style={{
+                      ...styles.ambiguousMarker,
+                      left: `${(idx / Math.max(1, totalSteps - 1)) * 100}%`,
+                    }}
+                  />
+                ))}
+                {showUnmappedMarkers && unmappedIndices.map((idx) => (
+                  <div
+                    key={`unmapped_${idx}`}
+                    title={`Unmapped at step ${idx + 1}`}
+                    onClick={() => onStepChange(idx)}
+                    style={{
+                      ...styles.unmappedMarker,
+                      left: `${(idx / Math.max(1, totalSteps - 1)) * 100}%`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={styles.markerToggleRow}>
+                <button
+                  type="button"
+                  style={styles.markerToggleBtn(showAmbiguousMarkers, "ambiguous")}
+                  onClick={() => setShowAmbiguousMarkers((prev) => !prev)}
+                >
+                  <span style={styles.markerDot(THEME.warning)}></span>
+                  Ambiguous ({ambiguousIndices.length})
+                </button>
+                <button
+                  type="button"
+                  style={styles.markerToggleBtn(showUnmappedMarkers, "unmapped")}
+                  onClick={() => setShowUnmappedMarkers((prev) => !prev)}
+                >
+                  <span style={styles.markerDot(THEME.danger)}></span>
+                  Unmapped ({unmappedIndices.length})
+                </button>
               </div>
 
               <div style={styles.meta}>
@@ -135,6 +192,7 @@ const TracePlayer = ({
                   Total: {totalSteps}
                 </span>
               </div>
+
             </>
           )}
         </div>
@@ -254,6 +312,54 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 0 5px rgba(239, 68, 68, 0.5)",
   },
+  ambiguousMarker: {
+    position: "absolute",
+    top: "4px",
+    width: "3px",
+    height: "12px",
+    backgroundColor: THEME.warning,
+    borderRadius: "2px",
+    cursor: "pointer",
+    boxShadow: "0 0 4px rgba(245, 158, 11, 0.6)",
+  },
+  unmappedMarker: {
+    position: "absolute",
+    top: "4px",
+    width: "3px",
+    height: "12px",
+    backgroundColor: THEME.danger,
+    borderRadius: "2px",
+    cursor: "pointer",
+    boxShadow: "0 0 4px rgba(239, 68, 68, 0.6)",
+  },
+  markerToggleRow: {
+    marginTop: "10px",
+    display: "flex",
+    gap: "8px",
+  },
+  markerToggleBtn: (active, kind) => ({
+    flex: 1,
+    borderRadius: "20px",
+    border: `1px solid ${active ? (kind === "ambiguous" ? THEME.warning : THEME.danger) : THEME.border}`,
+    background: active
+      ? (kind === "ambiguous" ? "rgba(245, 158, 11, 0.18)" : "rgba(239, 68, 68, 0.18)")
+      : "rgba(255,255,255,0.03)",
+    color: THEME.textMain,
+    padding: "6px 10px",
+    fontSize: "11px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    cursor: "pointer",
+  }),
+  markerDot: (color) => ({
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: color,
+    boxShadow: `0 0 6px ${color}`,
+  }),
   meta: {
     display: "flex",
     justifyContent: "space-between",

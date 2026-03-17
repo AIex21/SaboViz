@@ -342,6 +342,19 @@ export const saboStylesheet = [
         style: { 'width': 3, 'line-style': 'dashed', 'line-dash-pattern': [5, 5], 'line-color': '#ff6b6b', 'target-arrow-color': '#ff6b6b', 'opacity': 1, 'z-index': 999 }
     },
     {
+        selector: '.trace-call-loop',
+        style: {
+            'curve-style': 'bezier',
+            'loop-direction': '45deg',
+            'loop-sweep': '95deg',
+            'control-point-step-size': 70,
+            'source-endpoint': '0deg',
+            'target-endpoint': '80deg',
+            'arrow-scale': 1.1,
+            'z-index': 1001
+        }
+    },
+    {
         selector: '.feature-dim',
         style: {
             'opacity': 0.35, // Keep context visible while still de-emphasizing non-feature elements

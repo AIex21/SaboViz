@@ -26,6 +26,11 @@ const SaboGraph = ({
     features,
     activeFeatureIds,
     onFeatureToggle,
+    currentTrace,
+    traceSteps,
+    currentStep,
+    onStepChange,
+    failureIndices,
     isDecomposing,
     isProjectSummarizing,
     onSummarizeNode
@@ -80,6 +85,16 @@ const SaboGraph = ({
         const maxPush = 24;
         const maxGroupSize = 180;
 
+        const getCollisionRect = (node) => {
+            const bb = node.boundingBox({ includeLabels: true, includeOverlays: false });
+            return {
+                cx: (bb.x1 + bb.x2) / 2,
+                cy: (bb.y1 + bb.y2) / 2,
+                w: Math.max(1, bb.x2 - bb.x1),
+                h: Math.max(1, bb.y2 - bb.y1),
+            };
+        };
+
         cyInstance.batch(() => {
             groupsByParent.forEach((group) => {
                 // Include leaves and expanded containers as collision bodies.
@@ -91,20 +106,16 @@ const SaboGraph = ({
 
                     for (let i = 0; i < colliders.length; i++) {
                         const a = colliders[i];
-                        const aPos = a.position();
-                        const aW = a.outerWidth();
-                        const aH = a.outerHeight();
+                        const aRect = getCollisionRect(a);
 
                         for (let j = i + 1; j < colliders.length; j++) {
                             const b = colliders[j];
-                            const bPos = b.position();
-                            const bW = b.outerWidth();
-                            const bH = b.outerHeight();
+                            const bRect = getCollisionRect(b);
 
-                            const minDx = (aW + bW) / 2 + padding;
-                            const minDy = (aH + bH) / 2 + padding;
-                            const dx = bPos.x - aPos.x;
-                            const dy = bPos.y - aPos.y;
+                            const minDx = (aRect.w + bRect.w) / 2 + padding;
+                            const minDy = (aRect.h + bRect.h) / 2 + padding;
+                            const dx = bRect.cx - aRect.cx;
+                            const dy = bRect.cy - aRect.cy;
 
                             if (Math.abs(dx) >= minDx || Math.abs(dy) >= minDy) continue;
 
@@ -128,6 +139,8 @@ const SaboGraph = ({
 
                             const aFixed = fixedNodeIds.has(a.id());
                             const bFixed = fixedNodeIds.has(b.id());
+                            const aPos = a.position();
+                            const bPos = b.position();
 
                             if (!aFixed && !bFixed) {
                                 a.position({ x: aPos.x - pushX, y: aPos.y - pushY });
@@ -273,6 +286,7 @@ const SaboGraph = ({
 
                 // Only draw the edge if both ends are resolved to visible nodes
                 if (visibleActiveId && visibleSourceId && currentAction) {
+                    const isSelfLoop = visibleSourceId === visibleActiveId;
                     cyInstance.add({
                         group: 'edges',
                         data: {
@@ -281,7 +295,7 @@ const SaboGraph = ({
                             target: visibleActiveId,
                             label: 'executes'
                         },
-                        classes: 'trace-call-edge' // Matches your config style
+                        classes: isSelfLoop ? 'trace-call-edge trace-call-loop' : 'trace-call-edge'
                     });
                 }
             }
@@ -348,6 +362,15 @@ const SaboGraph = ({
                     });
 
                     const childrenCollection = cyInstance.collection(children);
+
+                    // Immediately resolve local collisions after seeding child positions.
+                    const seedCollisionRadius = 220;
+                    const seedNearbyNodes = cyInstance.nodes().filter((n) => {
+                        const p = n.position();
+                        return Math.hypot(p.x - anchor.x, p.y - anchor.y) <= seedCollisionRadius;
+                    });
+                    resolveOverlaps(childrenCollection.union(seedNearbyNodes), new Set([parentId]));
+
                     const regionNodes = childrenCollection.union(parentNode);
                     const regionIds = new Set(regionNodes.map((n) => n.id()));
                     const regionEdges = cyInstance.edges().filter((edge) => {
@@ -456,6 +479,34 @@ const SaboGraph = ({
                     return Math.hypot(p.x - movedPos.x, p.y - movedPos.y) <= 280;
                 });
                 resolveOverlaps(nearby, new Set([movedNode.id()]));
+
+                // If a moved node belongs to a compound, its ancestors may resize and create
+                // new collisions even when those colliders are not near the moved child itself.
+                const ancestors = movedNode.ancestors().filter((n) => n.isNode());
+                if (ancestors.length > 0) {
+                    let growthScope = cyInstance.collection();
+                    const growthFixedIds = new Set([movedNode.id()]);
+                    const growthMargin = 180;
+
+                    ancestors.forEach((ancestor) => {
+                        growthFixedIds.add(ancestor.id());
+                        const bb = ancestor.boundingBox();
+
+                        const nearbyToAncestor = cyInstance.nodes().filter((n) => {
+                            const p = n.position();
+                            return (
+                                p.x >= bb.x1 - growthMargin &&
+                                p.x <= bb.x2 + growthMargin &&
+                                p.y >= bb.y1 - growthMargin &&
+                                p.y <= bb.y2 + growthMargin
+                            );
+                        });
+
+                        growthScope = growthScope.union(nearbyToAncestor).union(ancestor);
+                    });
+
+                    resolveOverlaps(growthScope, growthFixedIds);
+                }
             }
             if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
         };
@@ -479,6 +530,11 @@ const SaboGraph = ({
                 features={features}
                 activeFeatureIds={activeFeatureIds}
                 onFeatureToggle={onFeatureToggle}
+                currentTrace={currentTrace}
+                traceSteps={traceSteps}
+                currentStep={currentStep}
+                onStepChange={onStepChange}
+                failureIndices={failureIndices}
                 isDecomposing={isDecomposing}
             />
             <CytoscapeComponent

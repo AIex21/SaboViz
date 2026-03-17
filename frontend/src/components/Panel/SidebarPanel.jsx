@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { THEME, EDGE_COLORS, formatKey } from '../../config/graphConfig';
+
+const TRACE_WINDOW_RADIUS = 10;
 
 const SidebarPanel = ({ 
     isOpen, 
@@ -9,9 +11,53 @@ const SidebarPanel = ({
     features = [], 
     onFeatureToggle,
     activeFeatureIds = new Set(),
+    currentTrace = null,
+    traceSteps = [],
+    currentStep = 0,
+    onStepChange,
+    failureIndices = [],
     isDecomposing = false 
 }) => {
-    const [activeTab, setActiveTab] = useState('structural'); // 'structural' or 'functional'
+    const [activeTab, setActiveTab] = useState('structural');
+    const failureSet = useMemo(() => new Set(failureIndices), [failureIndices]);
+
+    const nearbySteps = useMemo(() => {
+        if (!traceSteps.length) return [];
+
+        const start = Math.max(0, currentStep - TRACE_WINDOW_RADIUS);
+        const end = Math.min(traceSteps.length, currentStep + TRACE_WINDOW_RADIUS + 1);
+
+        return traceSteps.slice(start, end).map((step, offset) => ({
+            index: start + offset,
+            step,
+        }));
+    }, [traceSteps, currentStep]);
+
+    const getStepLabel = (step, index) => {
+        const props = step?.data?.properties || {};
+        if (props.simpleName) return props.simpleName;
+        if (props.message) return props.message;
+
+        const type = props.type || 'action';
+        const source = props.sourceId ? String(props.sourceId) : '?';
+        const target = props.targetId ? String(props.targetId) : '?';
+        return `${index + 1}: ${type} ${source} -> ${target}`;
+    };
+
+    const getActionKind = (step) => {
+        const type = String(step?.data?.properties?.type || '').toLowerCase();
+        if (type.includes('return')) return 'return';
+        if (type.includes('call')) return 'call';
+        return null;
+    };
+
+    const getResolutionStatus = (step) => {
+        const raw = String(step?.data?.properties?.operationResolution || '').toLowerCase();
+        if (raw === 'resolved') return { key: 'resolved', label: 'Resolved', color: THEME.success };
+        if (raw === 'ambiguous') return { key: 'ambiguous', label: 'Ambiguous', color: '#f59e0b' };
+        if (raw === 'unmapped') return { key: 'unmapped', label: 'Unmapped', color: THEME.danger };
+        return { key: 'unknown', label: 'Unknown', color: '#6b7280' };
+    };
 
     return (
         <div style={sidebarContainerStyle(isOpen)}>
@@ -49,6 +95,12 @@ const SidebarPanel = ({
                             style={tabStyle(activeTab === 'functional')}
                         >
                             FUNCTIONAL
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('trace')}
+                            style={tabStyle(activeTab === 'trace')}
+                        >
+                            TRACE
                         </button>
                     </div>
 
@@ -144,6 +196,62 @@ const SidebarPanel = ({
                                 })}
                             </div>
                         )}
+
+                        {activeTab === 'trace' && (
+                            <div style={sectionStyle}>
+                                <div style={subHeaderStyle}>TRACE WINDOW</div>
+
+                                {!currentTrace && (
+                                    <div style={emptyStateStyle}>
+                                        Select a trace in the replay panel to browse steps.
+                                    </div>
+                                )}
+
+                                {currentTrace && (
+                                    <>
+                                        <div style={traceSummaryStyle}>
+                                            <div style={traceTitleStyle} title={currentTrace.name}>{currentTrace.name}</div>
+                                            <div style={traceMetaStyle}>Step {Math.min(currentStep + 1, Math.max(traceSteps.length, 1))} / {traceSteps.length}</div>
+                                        </div>
+
+                                        <div style={traceListStyle}>
+                                            {nearbySteps.map(({ index, step }) => {
+                                                const isCurrent = index === currentStep;
+                                                const isFailure = failureSet.has(index);
+                                                const actionKind = getActionKind(step);
+                                                const resolution = getResolutionStatus(step);
+
+                                                return (
+                                                    <button
+                                                        key={step?.data?.id || `trace_step_${index}`}
+                                                        type="button"
+                                                        onClick={() => onStepChange && onStepChange(index)}
+                                                        style={traceRowStyle(isCurrent, isFailure)}
+                                                        title={`${getStepLabel(step, index)} | ${actionKind || 'action'} | ${resolution.label}`}
+                                                    >
+                                                        <span style={traceIndexStyle(isCurrent, isFailure)}>{index + 1}</span>
+                                                        <div style={traceRowContentStyle}>
+                                                            <span style={traceLabelStyle}>{getStepLabel(step, index)}</span>
+                                                            <div style={traceMetaBadgesStyle}>
+                                                                {actionKind && (
+                                                                    <span style={traceTypeBadgeStyle(actionKind)}>
+                                                                        {actionKind.toUpperCase()}
+                                                                    </span>
+                                                                )}
+                                                                <span style={traceResolutionBadgeStyle}>
+                                                                    <span style={traceResolutionDotStyle(resolution.color)}></span>
+                                                                    <span>{resolution.label}</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -211,7 +319,7 @@ const contentWrapperStyle = {
 // --- NAVIGATION TABS ---
 
 const tabContainerStyle = {
-    display: 'flex', padding: '16px 16px 0 16px', gap: '12px', 
+    display: 'flex', padding: '16px 16px 0 16px', gap: '8px', 
     borderBottom: '1px solid rgba(255,255,255,0.05)'
 };
 
@@ -373,5 +481,113 @@ const spinnerStyle = {
     borderTop: `3px solid ${THEME.primary}`,
     animation: 'spin 1s linear infinite'
 };
+
+const traceSummaryStyle = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '10px',
+    padding: '10px 12px',
+    marginBottom: '10px',
+};
+
+const traceTitleStyle = {
+    fontSize: '12px',
+    color: THEME.textMain,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+};
+
+const traceMetaStyle = {
+    marginTop: '4px',
+    fontSize: '11px',
+    color: THEME.textMuted,
+    fontFamily: 'monospace',
+};
+
+const traceListStyle = {
+    maxHeight: '54vh',
+    overflowY: 'auto',
+    padding: '4px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'rgba(255,255,255,0.02)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+};
+
+const traceRowStyle = (isCurrent, isFailure) => ({
+    width: '100%',
+    border: '1px solid transparent',
+    borderRadius: '6px',
+    background: isCurrent ? `${THEME.primary}26` : isFailure ? 'rgba(239, 68, 68, 0.14)' : 'transparent',
+    color: THEME.textMain,
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '38px 1fr',
+    gap: '8px',
+    alignItems: 'center',
+    textAlign: 'left',
+    padding: '6px 8px',
+    outline: isCurrent ? `1px solid ${THEME.primary}` : 'none',
+});
+
+const traceIndexStyle = (isCurrent, isFailure) => ({
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: isCurrent ? THEME.primary : isFailure ? THEME.danger : THEME.textMuted,
+});
+
+const traceLabelStyle = {
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+};
+
+const traceRowContentStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    minWidth: 0,
+};
+
+const traceMetaBadgesStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+};
+
+const traceTypeBadgeStyle = (kind) => ({
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.4px',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    color: '#fff',
+    background: kind === 'return' ? 'rgba(214, 51, 132, 0.85)' : 'rgba(34, 139, 230, 0.85)',
+});
+
+const traceResolutionBadgeStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    fontSize: '10px',
+    color: THEME.textMuted,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+};
+
+const traceResolutionDotStyle = (color) => ({
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+    backgroundColor: color,
+    boxShadow: `0 0 6px ${color}88`,
+});
 
 export default SidebarPanel;
