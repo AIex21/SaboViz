@@ -132,7 +132,13 @@ class FunctionalDecompositionService:
         
         return name
 
-    def run_functional_decomposition(self, project_id: int, distance_threshold: float, infrastructure_threshold: float):
+    def run_functional_decomposition(
+        self,
+        project_id: int,
+        distance_threshold: float,
+        infrastructure_threshold: float,
+        use_ai: bool = True
+    ):
         self.graph_service.change_project_status(
             project_id,
             status="decomposing",
@@ -149,6 +155,7 @@ class FunctionalDecompositionService:
 
         summarizer = SummarizationService(self.db)
         is_llm_enabled = summarizer.llm.is_enabled
+        allow_ai = use_ai and is_llm_enabled
         
         for label, indices in clusters.items():
             avg_score = np.mean(idf_scores[indices])
@@ -168,7 +175,7 @@ class FunctionalDecompositionService:
                 category = "Feature"
                 default_name = f"Feature_{self.generate_feature_name(components)}"
 
-            if is_llm_enabled and linked_nodes:
+            if allow_ai and linked_nodes:
                 internal_edges = self.graph_service.get_edges_between_nodes(components)
                 ai_result = summarizer.prompt_feature(linked_nodes, internal_edges, is_infrastructure)
                 feature_name = ai_result.get("feature_name", default_name)

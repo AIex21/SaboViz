@@ -125,6 +125,21 @@ function GraphPage() {
     loadRoots();
   }, [projectId, showToast]);
 
+  useEffect(() => {
+    if (projectStatus !== 'summarizing') return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const projectMeta = await projectApi.getProject(projectId);
+        setProjectStatus(projectMeta.status);
+      } catch (error) {
+        // Polling failure should not disrupt graph interactions.
+      }
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [projectId, projectStatus]);
+
   const handleFeatureToggle = (featureId) => {
     setActiveFeatureIds(prev => {
       const next = new Set(prev);
@@ -540,6 +555,43 @@ function GraphPage() {
 
   const currentTraceObj = availableTraces.find(t => t.id === selectedTraceId);
 
+  const handleSummarizeNode = async (nodeId) => {
+    try {
+      const projectMeta = await projectApi.getProject(projectId);
+      setProjectStatus(projectMeta.status);
+
+      if (projectMeta.status === 'summarizing') {
+        showToast('Project summarization is already running.', 'info');
+        return null;
+      }
+
+      const result = await projectApi.summarizeNode(projectId, nodeId);
+      const newSummary = result?.summary || null;
+
+      if (newSummary) {
+        setGraphElements((prev) => prev.map((el) => {
+          if (el?.data?.source) return el;
+          if (String(el?.data?.id) !== String(nodeId)) return el;
+
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              ai_summary: newSummary,
+            }
+          };
+        }));
+      }
+
+      showToast('Node summarization completed.', 'success');
+      return newSummary;
+    } catch (error) {
+      const msg = error.response?.data?.detail || error.message;
+      showToast(`Node summarization failed: ${msg}`, 'error');
+      throw error;
+    }
+  };
+
   return (
     <div style={styles.container}>
       
@@ -610,6 +662,8 @@ function GraphPage() {
           activeFeatureIds={activeFeatureIds}
           onFeatureToggle={handleFeatureToggle}
           isDecomposing={projectStatus === 'decomposing'}
+          isProjectSummarizing={projectStatus === 'summarizing'}
+          onSummarizeNode={handleSummarizeNode}
         />
       </div>
 

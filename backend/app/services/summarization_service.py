@@ -34,44 +34,68 @@ class SummarizationService:
 
         self.shallow_summaries: Dict[str, Dict[str, Any]] = {}
 
+    def _prepare_context(self, project_id: int):
+        self.nodes_map = {}
+        self.outbound_edges = {}
+        self.children_map = {}
+        self.node_states = {}
+        self.shallow_summaries = {}
+        self.snippets = {}
+
+        nodes = self.graph_service.get_all_nodes(project_id)
+        edges = self.graph_service.get_all_edges(project_id)
+
+        for n in nodes:
+            self.nodes_map[n.id] = n
+            self.outbound_edges[n.id] = []
+
+            if n.parent_id:
+                if n.parent_id not in self.children_map:
+                    self.children_map[n.parent_id] = []
+                self.children_map[n.parent_id].append(n)
+
+        for e in edges:
+            if e.source_id in self.outbound_edges:
+                self.outbound_edges[e.source_id].append(e)
+
+        snippets_path = HOST_DATA_PATH / str(project_id) / "FullProject_snippets.json"
+        if snippets_path.exists():
+            with open(snippets_path, 'r', encoding='utf-8') as f:
+                self.snippets = json.load(f)
+
     def run_summarization(self, project_id: int):
         try:
             if not self.llm.is_enabled:
                 return
 
             self.graph_service.change_project_status(project_id, "summarizing", "Summarizing architecture with AI...")
-
-            nodes = self.graph_service.get_all_nodes(project_id)
-            edges = self.graph_service.get_all_edges(project_id)
-
-            for n in nodes:
-                self.nodes_map[n.id] = n
-                self.outbound_edges[n.id] = []
-
-                if n.parent_id:
-                    if n.parent_id not in self.children_map:
-                        self.children_map[n.parent_id] = []
-                    self.children_map[n.parent_id].append(n)
-
-            for e in edges:
-                if e.source_id in self.outbound_edges:
-                    self.outbound_edges[e.source_id].append(e)
-
-            snippets_path = HOST_DATA_PATH / str(project_id) / "FullProject_snippets.json"
-            if snippets_path.exists():
-                with open(snippets_path, 'r', encoding='utf-8') as f:
-                    self.snippets = json.load(f)
+            self._prepare_context(project_id)
 
             roots = self.graph_service.get_project_roots(project_id)
 
             for root in roots:
                 self.summarize_dfs(root.id)
 
-            # self.graph_service.change_project_status(project_id, "ready", "AI Summarization complete.")
+            self.graph_service.change_project_status(project_id, "ready", "AI Summarization complete.")
         
         except Exception as e:
             self.graph_service.change_project_status(project_id, "error", f"Summarization failed: {str(e)[:500]}")
             print(f"Summarization failed: {str(e)[:500]}")
+
+    def summarize_single_node(self, project_id: int, node_id: str) -> Dict[str, Any]:
+        if not self.llm.is_enabled:
+            raise ValueError("AI summarization is disabled.")
+
+        self.graph_service.change_project_status(project_id, "summarizing", f"Summarizing architecture with AI for {node_id}...")
+        self._prepare_context(project_id)
+
+        if node_id not in self.nodes_map:
+            raise ValueError("Node not found in project.")
+
+        summary = self.summarize_dfs(node_id)
+        self.graph_service.change_project_status(project_id, "ready", "AI Summarization complete.")
+
+        return summary
 
     def summarize_dfs(self, node_id: str) -> Dict[str, Any]:
         if node_id not in self.nodes_map:

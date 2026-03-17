@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { THEME, EDGE_COLORS } from '../../config/graphConfig';
 
 // --- CONFIGURATION ---
@@ -17,7 +17,8 @@ const CODE_KEYS = new Set([
 
 const STATUS_KEYS = new Set(['Message', 'message', 'status', 'error']);
 
-const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [] }) => {
+const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [], onSummarizeNode, isProjectSummarizing = false }) => {
+    const [isSummarizingNode, setIsSummarizingNode] = useState(false);
     
     if (!selectedElement) return null;
 
@@ -125,6 +126,16 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
         return features.find(f => f.id === featId);
     }).filter(Boolean);
 
+    const handleSummarizeNode = async () => {
+        if (!onSummarizeNode || !isNode || isSummarizingNode || isProjectSummarizing) return;
+        setIsSummarizingNode(true);
+        try {
+            await onSummarizeNode(id);
+        } finally {
+            setIsSummarizingNode(false);
+        }
+    };
+
     return (
         <div style={styles.panel}>
             {/* HEADER */}
@@ -137,6 +148,20 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
                 <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
                     {isNode && (
                         <>
+                            <button
+                                onClick={handleSummarizeNode}
+                                disabled={isSummarizingNode || isProjectSummarizing}
+                                style={{
+                                    ...styles.headerBtn,
+                                    background: 'rgba(139, 92, 246, 0.25)',
+                                    border: '1px solid rgba(139, 92, 246, 0.65)',
+                                    opacity: (isSummarizingNode || isProjectSummarizing) ? 0.6 : 1,
+                                    cursor: (isSummarizingNode || isProjectSummarizing) ? 'not-allowed' : 'pointer'
+                                }}
+                                title={isProjectSummarizing ? "Project summarization is in progress" : "Summarize this node"}
+                            >
+                                {isSummarizingNode ? '...' : '✨'}
+                            </button>
                             <button
                                 onClick={() => onToggleEdgeFocus && onToggleEdgeFocus(id)}
                                 style={{

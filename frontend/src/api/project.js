@@ -8,10 +8,17 @@ const api = axios.create({
 
 export const projectApi = {
     // 1. Upload .lpg.json file
-    uploadProject: async (file, name) => {
+    uploadProject: async (file, name, options = {}) => {
+        const {
+            autoContinueUnresolved = false,
+            runSummarization = true
+        } = options;
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('name', name);
+        formData.append('auto_continue_unresolved', String(autoContinueUnresolved));
+        formData.append('run_summarization', String(runSummarization));
 
         const response = await api.post('/projects/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
@@ -101,11 +108,12 @@ export const projectApi = {
         return response.data;
     },
 
-    startDecomposition: async (projectId, distanceThreshold = 0.4, infrastructureThreshold = 0.3) => {
+    startDecomposition: async (projectId, distanceThreshold = 0.4, infrastructureThreshold = 0.3, useAi = true) => {
         const response = await api.post(`/projects/${projectId}/decompose`, null, {
             params: {
                 distance_threshold: distanceThreshold,
-                infrastructure_threshold: infrastructureThreshold
+                infrastructure_threshold: infrastructureThreshold,
+                use_ai: useAi
             }
         });
         return response.data;
@@ -113,6 +121,18 @@ export const projectApi = {
 
     getFeatures: async (projectId) => {
         const response = await api.get(`/projects/${projectId}/features`);
+        return response.data;
+    },
+
+    rerunSummarization: async (projectId) => {
+        const response = await api.post(`/projects/${projectId}/summarization/rerun`);
+        return response.data;
+    },
+
+    summarizeNode: async (projectId, nodeId) => {
+        const response = await api.post(`/projects/${projectId}/nodes/summarize`, null, {
+            params: { node_id: nodeId }
+        });
         return response.data;
     }
 };

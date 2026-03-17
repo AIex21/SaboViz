@@ -8,6 +8,8 @@ import TraceUploadModal from '../Panel/TraceUploadModal';
 import TraceListModal from '../Panel/TraceListModal';
 import ModalButton from '../Common/ModalButton';
 import DecompositionModal from '../Panel/DecompositionModal'
+import CreateProjectOptionsModal from '../Panel/CreateProjectOptionsModal';
+import ProjectActionsModal from '../Panel/ProjectActionsModal';
 import { useToast } from '../../context/ToastContext';
 
 const ProjectsPage = () => {
@@ -23,6 +25,8 @@ const ProjectsPage = () => {
     const [selectedProjectForTrace, setSelectedProjectForTrace] = useState(null);
     const [viewTracesProject, setViewTracesProject] = useState(null);
     const [selectedProjectForDecomp, setSelectedProjectForDecomp] = useState(null);
+    const [isCreateOptionsModalOpen, setIsCreateOptionsModalOpen] = useState(false);
+    const [selectedProjectForActions, setSelectedProjectForActions] = useState(null);
 
     useEffect(() => { 
         loadProjects(); 
@@ -90,9 +94,19 @@ const ProjectsPage = () => {
             showToast("Please select a file and enter a name", "error");
             return;
         }
+
+        setIsCreateOptionsModalOpen(true);
+    };
+
+    const handleConfirmUploadOptions = async ({ autoContinueUnresolved, runSummarization }) => {
+        setIsCreateOptionsModalOpen(false);
         setIsUploading(true);
+
         try {
-            const newProject = await projectApi.uploadProject(file, projectName);
+            const newProject = await projectApi.uploadProject(file, projectName, {
+                autoContinueUnresolved,
+                runSummarization
+            });
             setProjects(prevProjects => [newProject, ...prevProjects]);
             setProjectName("");
             setFile(null);
@@ -160,9 +174,30 @@ const ProjectsPage = () => {
         setSelectedProjectForDecomp(project);
     };
 
-    const handleConfirmDecomposition = async (projectId, distThreshold, infraThreshold) => {
+    const handleOpenActionsModal = (e, project) => {
+        e.stopPropagation();
+        setSelectedProjectForActions(project);
+    };
+
+    const handleRerunSummarization = async (project) => {
         try {
-            await projectApi.startDecomposition(projectId, distThreshold, infraThreshold);
+            await projectApi.rerunSummarization(project.id);
+            showToast("Summarization started.", "info");
+            setSelectedProjectForActions(null);
+
+            setProjects(prev => prev.map(p =>
+                p.id === project.id
+                    ? { ...p, status: 'summarizing', description: 'Summarizing architecture with AI...' }
+                    : p
+            ));
+        } catch (error) {
+            showToast("Failed to start summarization.", "error");
+        }
+    };
+
+    const handleConfirmDecomposition = async (projectId, distThreshold, infraThreshold, useAi) => {
+        try {
+            await projectApi.startDecomposition(projectId, distThreshold, infraThreshold, useAi);
             
             showToast("Functional decomposition started.", "info");
 
@@ -239,7 +274,7 @@ const ProjectsPage = () => {
                                 ...styles.card, 
                                 opacity: (p.status === 'processing' || p.status === 'decomposing' || p.status === 'summarizing') ? 0.6 : 1,
                                 pointerEvents: p.status === 'processing' ? 'none' : 'auto'
-                            }} onClick={() => p.status === 'ready' && navigate(`/project/${p.id}`)}>
+                            }} onClick={() => (p.status === 'ready' || p.status === 'summarizing') && navigate(`/project/${p.id}`)}>
                             <div style={styles.cardHeader}>
                                 <div style={{
                                     ...styles.iconPlaceholder,
@@ -285,7 +320,7 @@ const ProjectsPage = () => {
 
                             <div style={styles.cardFooter}>
                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
-                                    {p.status === 'ready' ? (
+                                    {(p.status === 'ready' || p.status === 'summarizing') ? (
                                         <span style={styles.openLink}>Open Workspace →</span>
                                     ): p.status === 'unresolved' ? (
                                         <button
@@ -299,40 +334,18 @@ const ProjectsPage = () => {
                                     )}
 
                                     {p.status === 'ready' && (
-                                        <div style={{display: 'flex', gap: '8px'}}>
-
-                                            {/* FUNCTIONAL DECOMPOSITION BUTTON */}
-                                            <ModalButton 
-                                                variant="primary" 
-                                                style={{ 
-                                                    backgroundColor: THEME.accent, 
-                                                    height: '28px', 
-                                                    padding: '0 10px',
-                                                    fontSize: '11px' 
-                                                }}
-                                                onClick={(e) => handleOpenDecompModal(e, p)}
-                                            >
-                                                Extract Features
-                                            </ModalButton>
-
-                                            {/* VIEW TRACES BUTTON */}
-                                            <button 
-                                                onClick={(e) => handleViewTraces(e, p)}
-                                                style={styles.iconBtn}
-                                                title="View All Traces"
-                                            >
-                                                <span style={{fontSize: '14px'}}>📋</span>
-                                            </button>
-
-                                            {/* UPLOAD TRACE BUTTON */}
-                                            <button 
-                                                onClick={(e) => handleOpenTraceModal(e, p)}
-                                                style={styles.iconBtn}
-                                                title="Add New Trace"
-                                            >
-                                                <span style={{fontSize: '14px'}}>📄</span> +
-                                            </button>
-                                        </div>
+                                        <ModalButton
+                                            variant="primary"
+                                            style={{
+                                                backgroundColor: THEME.accent,
+                                                height: '28px',
+                                                padding: '0 12px',
+                                                fontSize: '11px'
+                                            }}
+                                            onClick={(e) => handleOpenActionsModal(e, p)}
+                                        >
+                                            Actions
+                                        </ModalButton>
                                     )}
                                 </div>
                             </div>
@@ -386,6 +399,34 @@ const ProjectsPage = () => {
                     project={selectedProjectForDecomp}
                     onClose={() => setSelectedProjectForDecomp(null)}
                     onConfirm={handleConfirmDecomposition}
+                />
+            )}
+
+            {isCreateOptionsModalOpen && (
+                <CreateProjectOptionsModal
+                    projectName={projectName}
+                    onClose={() => setIsCreateOptionsModalOpen(false)}
+                    onConfirm={handleConfirmUploadOptions}
+                />
+            )}
+
+            {selectedProjectForActions && (
+                <ProjectActionsModal
+                    project={selectedProjectForActions}
+                    onClose={() => setSelectedProjectForActions(null)}
+                    onRerunSummarization={() => handleRerunSummarization(selectedProjectForActions)}
+                    onAddTrace={() => {
+                        setSelectedProjectForTrace(selectedProjectForActions);
+                        setSelectedProjectForActions(null);
+                    }}
+                    onViewTraces={() => {
+                        setViewTracesProject(selectedProjectForActions);
+                        setSelectedProjectForActions(null);
+                    }}
+                    onExtractFeatures={() => {
+                        setSelectedProjectForDecomp(selectedProjectForActions);
+                        setSelectedProjectForActions(null);
+                    }}
                 />
             )}
         </div>

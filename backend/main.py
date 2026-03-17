@@ -5,7 +5,6 @@ from app.routers import graph_router, trace_router
 
 # Create Database Tables on startup
 Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Sabo Visualization API")
 
 # Configure CORS

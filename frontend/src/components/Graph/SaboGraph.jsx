@@ -26,7 +26,9 @@ const SaboGraph = ({
     features,
     activeFeatureIds,
     onFeatureToggle,
-    isDecomposing
+    isDecomposing,
+    isProjectSummarizing,
+    onSummarizeNode
 }) => {
     const [selectedElement, setSelectedElement] = useState(null);
     const [cyInstance, setCyInstance] = useState(null);
@@ -497,6 +499,27 @@ const SaboGraph = ({
                 edgeFocusNodeIds={edgeFocusNodeIds}
                 activeTraceAction={currentAction}
                 features={features}
+                isProjectSummarizing={isProjectSummarizing}
+                onSummarizeNode={async (nodeId) => {
+                    if (!onSummarizeNode) return null;
+                    const summary = await onSummarizeNode(nodeId);
+
+                    if (summary) {
+                        setSelectedElement((prev) => {
+                            if (!prev || String(prev.id) !== String(nodeId)) return prev;
+                            return { ...prev, ai_summary: summary };
+                        });
+
+                        if (cyInstance) {
+                            const node = cyInstance.getElementById(String(nodeId));
+                            if (node.length > 0) {
+                                node.data('ai_summary', summary);
+                            }
+                        }
+                    }
+
+                    return summary;
+                }}
             />
         </div>
     );

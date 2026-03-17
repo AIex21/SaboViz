@@ -10,6 +10,8 @@ class Project(Base):
     name = Column(String, unique=True, index=True)
     status = Column(String, default="ready") # ''ready', 'processing', 'error'
     description = Column(Text, nullable=True) # Stores error messages or progress logs
+    auto_continue_unresolved = Column(Boolean, nullable=False, default=False)
+    run_summarization = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     nodes = relationship("Node", back_populates="project", cascade="all, delete-orphan")

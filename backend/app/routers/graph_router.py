@@ -94,10 +94,16 @@ async def upload_project(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     name: str = Form(...),
+    auto_continue_unresolved: bool = Form(False),
+    run_summarization: bool = Form(True),
     service: IngestService = Depends(get_ingest_service)
 ): 
     try:
-        project = service.create_project_entry(name)
+        project = service.create_project_entry(
+            name,
+            auto_continue_unresolved=auto_continue_unresolved,
+            run_summarization=run_summarization
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -109,9 +115,19 @@ async def upload_project(
             raise HTTPException(status_code=400, detail="Failed to parse JSON file.")
         
         if "declarations" in json_content:
-            background_tasks.add_task(service.process_m3_file, project.id, json_content)
+            background_tasks.add_task(
+                service.process_m3_file,
+                project.id,
+                json_content,
+                run_summarization
+            )
         elif "elements" in json_content:
-            background_tasks.add_task(service.ingest_lpg_file, project.id, json_content)
+            background_tasks.add_task(
+                service.ingest_lpg_file,
+                project.id,
+                json_content,
+                run_summarization
+            )
         else:
             raise HTTPException(status_code=400, detail="Unknown JSON format.")
 
@@ -119,7 +135,14 @@ async def upload_project(
         rascal_service = RascalService()
         content = await file.read()
         await rascal_service.prepare_workspace(project.id, content)
-        background_tasks.add_task(run_full_analysis_pipeline, project.id, rascal_service, service)
+        background_tasks.add_task(
+            run_full_analysis_pipeline,
+            project.id,
+            rascal_service,
+            service,
+            auto_continue_unresolved,
+            run_summarization
+        )
 
     return project
 
@@ -173,13 +196,20 @@ def start_decomposition(
     service: FunctionalDecompositionService = Depends(get_decomposition_service),
     graph_service: GraphService = Depends(get_service),
     distance_threshold: float = Query(0.4, ge=0.0, le=1.0, description="Max distance to group features"),
-    infrastructure_threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min ubiquity to mark as infrastructure")
+    infrastructure_threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min ubiquity to mark as infrastructure"),
+    use_ai: bool = Query(True, description="Use AI for feature naming and descriptions")
 ):
     if not graph_service.get_project_by_id(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     
     try:
-        background_tasks.add_task(service.run_functional_decomposition, project_id, distance_threshold, infrastructure_threshold)
+        background_tasks.add_task(
+            service.run_functional_decomposition,
+            project_id,
+            distance_threshold,
+            infrastructure_threshold,
+            use_ai
+        )
         return {"message": "Decomposition started in the background"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -203,3 +233,34 @@ def start_summarization(
     service = SummarizationService(db)
     background_tasks.add_task(service.run_summarization, project_id)
     return {"message": "Summarization started in the background."}
+
+@router.post("/projects/{project_id}/summarization/rerun")
+def rerun_project_summarization(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    graph_service: GraphService = Depends(get_service),
+    db: Session = Depends(get_db)
+):
+    if not graph_service.get_project_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    service = SummarizationService(db)
+    background_tasks.add_task(service.run_summarization, project_id)
+    return {"message": "Summarization started in the background."}
+
+@router.post("/projects/{project_id}/nodes/summarize")
+def summarize_single_node(
+    project_id: int,
+    node_id: str = Query(..., description="Node identifier to summarize"),
+    graph_service: GraphService = Depends(get_service),
+    db: Session = Depends(get_db)
+):
+    if not graph_service.get_project_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    service = SummarizationService(db)
+    try:
+        summary = service.summarize_single_node(project_id, node_id)
+        return {"node_id": node_id, "summary": summary}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

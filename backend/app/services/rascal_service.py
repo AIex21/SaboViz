@@ -144,7 +144,13 @@ class RascalService:
                 out.write(f.read())
         os.remove(temp_tar)
 
-def run_full_analysis_pipeline(project_id: int, rascal_service: RascalService, ingest_service: IngestService):
+def run_full_analysis_pipeline(
+    project_id: int,
+    rascal_service: RascalService,
+    ingest_service: IngestService,
+    auto_continue_unresolved: bool = False,
+    run_summarization: bool = True
+):
     with SessionLocal() as db:
         repo = GraphRepository(db)
         try:
@@ -157,14 +163,25 @@ def run_full_analysis_pipeline(project_id: int, rascal_service: RascalService, i
             unresolved = m3_content.get("unresolvedIncludes", [])
 
             if unresolved and len(unresolved) > 0:
-                count = len(unresolved)
-                repo.change_project_status(
-                    project_id,
-                    "unresolved",
-                    f"Action Needed: {count} unresolved includes found."
-                )
+                if auto_continue_unresolved:
+                    ingest_service.process_m3_file(
+                        project_id,
+                        m3_content,
+                        run_summarization=run_summarization
+                    )
+                else:
+                    count = len(unresolved)
+                    repo.change_project_status(
+                        project_id,
+                        "unresolved",
+                        f"Action Needed: {count} unresolved includes found."
+                    )
             else:
-                ingest_service.process_m3_file(project_id, m3_content)
+                ingest_service.process_m3_file(
+                    project_id,
+                    m3_content,
+                    run_summarization=run_summarization
+                )
         
         except Exception as e:
             repo.change_project_status(project_id, "error", f"Analysis Failed: {str(e)[:500]}")

@@ -22,12 +22,32 @@ class GraphRepository:
             self.db.refresh(project)
         return project
     
-    def create_project(self, name: str, status: str = "ready", description: str = None):
-        project = Project(name=name, status=status, description=description)
+    def create_project(
+        self,
+        name: str,
+        status: str = "ready",
+        description: str = None,
+        auto_continue_unresolved: bool = False,
+        run_summarization: bool = True
+    ):
+        project = Project(
+            name=name,
+            status=status,
+            description=description,
+            auto_continue_unresolved=auto_continue_unresolved,
+            run_summarization=run_summarization
+        )
         self.db.add(project)
         self.db.commit()
         self.db.refresh(project)
         return project
+
+    def get_project_ingest_options(self, project_id: int) -> dict:
+        project = self.get_project_by_id(project_id)
+        return {
+            "auto_continue_unresolved": bool(project.auto_continue_unresolved),
+            "run_summarization": bool(project.run_summarization),
+        }
     
     def get_all_projects(self):
         return self.db.query(Project).filter(Project.status != 'deleting').order_by(Project.id.desc()).all()

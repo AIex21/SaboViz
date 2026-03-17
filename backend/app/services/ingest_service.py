@@ -1,6 +1,6 @@
 import json
 from sqlalchemy.orm import Session
-from fastapi import UploadFile, HTTPException, BackgroundTasks
+from fastapi import BackgroundTasks
 from pathlib import Path
 from app.core.database import SessionLocal
 from app.repositories.graph_repo import GraphRepository
@@ -11,12 +11,23 @@ class IngestService:
     def __init__(self, db: Session):
         self.repo = GraphRepository(db)
 
-    def create_project_entry(self, name: str):
+    def create_project_entry(
+        self,
+        name: str,
+        auto_continue_unresolved: bool = False,
+        run_summarization: bool = True
+    ):
         existing = self.repo.get_project_by_name(name)
         if existing:
             raise ValueError(f"A project with the name '{name}' already exists.")
         
-        return self.repo.create_project(name=name, status="processing", description="Processing started...")
+        return self.repo.create_project(
+            name=name,
+            status="processing",
+            description="Processing started...",
+            auto_continue_unresolved=auto_continue_unresolved,
+            run_summarization=run_summarization
+        )
 
 
     def save_graph_data(self, repo: GraphRepository, project_id: int, elements: dict):
@@ -53,7 +64,7 @@ class IngestService:
 
         return len(nodes), len(edges)
     
-    def process_m3_file(self, project_id: int, m3_content: dict):
+    def process_m3_file(self, project_id: int, m3_content: dict, run_summarization: bool = True):
         with SessionLocal() as db:
             repo = GraphRepository(db)
             from app.services.summarization_service import SummarizationService
@@ -69,14 +80,15 @@ class IngestService:
 
                 nodes_len, edges_len = self.save_graph_data(repo, project_id, lpg_data.get("elements", {}))
 
-                summarization_service.run_summarization(project_id)
+                if run_summarization:
+                    summarization_service.run_summarization(project_id)
 
                 repo.change_project_status(project_id, status="ready", description=f"Imported {nodes_len} nodes and {edges_len} edges successfully.")
 
             except Exception as e:
                 repo.change_project_status(project_id, "error", str(e)[:500])
 
-    def ingest_lpg_file(self, project_id: int, lpg_content: dict):
+    def ingest_lpg_file(self, project_id: int, lpg_content: dict, run_summarization: bool = True):
         with SessionLocal() as db:
             repo = GraphRepository(db)
             from app.services.summarization_service import SummarizationService
@@ -86,7 +98,8 @@ class IngestService:
                 repo.change_project_status(project_id, "processing", "Importing JSON...")
                 nodes_len, edges_len = self.save_graph_data(repo, project_id, lpg_content.get("elements", {}))
 
-                summarization_service.run_summarization(project_id)
+                if run_summarization:
+                    summarization_service.run_summarization(project_id)
 
                 repo.change_project_status(project_id, status="ready", description=f"Imported {nodes_len} nodes and {edges_len} edges successfully.")
             
@@ -109,19 +122,23 @@ class IngestService:
         except Exception as e:
             raise RuntimeError(f"Failed to read analysis file: {e}")
         
-    def background_resume_task(self, project_id: int, json_path: Path):
+    def background_resume_task(self, project_id: int, json_path: Path, run_summarization: bool):
         try:
             with open(json_path, 'r') as f:
                 content = json.load(f)
-            self.process_m3_file(project_id, content)
+            self.process_m3_file(project_id, content, run_summarization=run_summarization)
         except Exception as e:
             with SessionLocal() as db:
                 repo = GraphRepository(db)
                 repo.change_project_status(project_id, "error", f"Resume Failed: {str(e)[:500]}")
 
-    def resume_ingestion(self, project_id: int, background_tasks: BackgroundTasks):
+    def resume_ingestion(self, project_id: int, background_tasks: BackgroundTasks, run_summarization: bool | None = None):
         from app.services.rascal_service import RascalService
         rascal_service = RascalService()
 
+        if run_summarization is None:
+            options = self.repo.get_project_ingest_options(project_id)
+            run_summarization = options["run_summarization"]
+
         json_path = rascal_service.get_analysis_file(project_id)
-        background_tasks.add_task(self.background_resume_task, project_id, json_path)
+        background_tasks.add_task(self.background_resume_task, project_id, json_path, run_summarization)

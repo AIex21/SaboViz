@@ -5,11 +5,12 @@ import ModalButton from '../Common/ModalButton';
 const DecompositionModal = ({ project, onClose, onConfirm }) => {
     const [distanceThreshold, setDistanceThreshold] = useState(0.4);
     const [infrastructureThreshold, setInfrastructureThreshold] = useState(0.3);
+    const [useAi, setUseAi] = useState(true);
 
     const [activeTooltip, setActiveTooltip] = useState(null);
 
     const handleSubmit = () => {
-        onConfirm(project.id, distanceThreshold, infrastructureThreshold);
+        onConfirm(project.id, distanceThreshold, infrastructureThreshold, useAi);
         onClose();
     };
 
@@ -95,6 +96,23 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                             style={styles.slider}
                         />
                     </div>
+
+                    <div style={styles.controlGroup}>
+                        <div style={styles.labelRow}>
+                            <label style={styles.label}>Use AI for Feature Naming & Description</label>
+                        </div>
+                        <label style={styles.toggleRow}>
+                            <input
+                                type="checkbox"
+                                checked={useAi}
+                                onChange={(e) => setUseAi(e.target.checked)}
+                                style={styles.checkbox}
+                            />
+                            <span style={styles.toggleText}>
+                                {useAi ? 'Enabled (LLM-assisted labels)' : 'Disabled (rule-based labels only)'}
+                            </span>
+                        </label>
+                    </div>
                 </div>
 
                 {/* Footer */}
@@ -160,6 +178,25 @@ const styles = {
     },
     slider: {
         width: '100%', cursor: 'pointer', accentColor: THEME.primary
+    },
+    toggleRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        border: `1px solid ${THEME.border}`,
+        borderRadius: '8px',
+        padding: '10px 12px',
+        background: 'rgba(255,255,255,0.03)'
+    },
+    checkbox: {
+        width: '16px',
+        height: '16px',
+        accentColor: THEME.primary,
+        cursor: 'pointer'
+    },
+    toggleText: {
+        fontSize: '12px',
+        color: THEME.textMuted
     },
     // Tooltip Logic
     tooltipContainer: {
