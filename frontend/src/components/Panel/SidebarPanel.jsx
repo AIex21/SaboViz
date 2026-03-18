@@ -55,7 +55,7 @@ const SidebarPanel = ({
         const raw = String(step?.data?.properties?.operationResolution || '').toLowerCase();
         if (raw === 'resolved') return { key: 'resolved', label: 'Resolved', color: THEME.success };
         if (raw === 'ambiguous') return { key: 'ambiguous', label: 'Ambiguous', color: '#f59e0b' };
-        if (raw === 'unmapped') return { key: 'unmapped', label: 'Unmapped', color: THEME.danger };
+        if (raw === 'unresolved') return { key: 'unresolved', label: 'Unresolved', color: THEME.danger };
         return { key: 'unknown', label: 'Unknown', color: '#6b7280' };
     };
 

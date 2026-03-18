@@ -21,7 +21,7 @@ class DynamicGraphBuilder:
         self.resolution_counts = {
             "resolved": 0,
             "ambiguous": 0,
-            "unmapped": 0,
+            "unresolved": 0,
         }
 
     def _candidate_matches_qualifier(self, candidate, qualifier: str) -> bool:
@@ -89,7 +89,7 @@ class DynamicGraphBuilder:
 
             return None, "ambiguous"
 
-        return None, "unmapped"
+        return None, "unresolved"
 
     def build_graph(self):
         nodes = []

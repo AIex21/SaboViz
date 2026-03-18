@@ -152,10 +152,16 @@ const ProjectsPage = () => {
         setSelectedProjectForTrace(project);
     }
 
-    const handleUploadTrace = async (projectId, file) => {
+    const handleUploadTrace = async (projectId, files) => {
         try {
-            await projectApi.uploadTrace(projectId, file);
-            showToast("Trace uploaded successfully!", "success");
+            const result = await projectApi.uploadTrace(projectId, files);
+            const uploadedCount = Array.isArray(result) ? result.length : 1;
+            showToast(
+                uploadedCount === 1
+                    ? "Trace uploaded successfully!"
+                    : `${uploadedCount} traces uploaded successfully!`,
+                "success"
+            );
             setSelectedProjectForTrace(null);
         } catch (error) {
             const msg = error.response?.data?.detail || error.message;
@@ -192,6 +198,29 @@ const ProjectsPage = () => {
             ));
         } catch (error) {
             showToast("Failed to start summarization.", "error");
+        }
+    };
+
+    const handleExportStatic = async (project) => {
+        try {
+            const exportPayload = await projectApi.exportStaticProject(project.id);
+            const content = JSON.stringify(exportPayload, null, 2);
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const safeName = (project.name || `project-${project.id}`).replace(/[^a-zA-Z0-9-_]+/g, '_');
+
+            a.href = url;
+            a.download = `${safeName}.static-graph.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            showToast("Static graph exported successfully.", "success");
+            setSelectedProjectForActions(null);
+        } catch (error) {
+            showToast("Failed to export static graph.", "error");
         }
     };
 
@@ -240,7 +269,7 @@ const ProjectsPage = () => {
                         </div>
                         
                         <div style={{...styles.inputGroup, flex: 1.5}}>
-                            <label style={styles.label}>SOURCE FILE .zip or LPG/M3 model</label>
+                            <label style={styles.label}>SOURCE FILE .zip or exported static graph JSON</label>
                             <div style={styles.fileInputWrapper}>
                                 <label style={styles.customFileButton}>
                                     {file ? 'Change File' : 'Browse Files'}
@@ -427,6 +456,7 @@ const ProjectsPage = () => {
                         setSelectedProjectForDecomp(selectedProjectForActions);
                         setSelectedProjectForActions(null);
                     }}
+                    onExportStatic={() => handleExportStatic(selectedProjectForActions)}
                 />
             )}
         </div>

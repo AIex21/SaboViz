@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 
-from app.services.rascal_service import HOST_DATA_PATH
+from app.core.storage_paths import HOST_DATA_PATH
 from app.core.exceptions import TraceValidationError
 
 # Import your custom modules
@@ -95,7 +95,7 @@ class TraceService:
 
         resolved_steps = dynamic_builder.resolution_counts.get("resolved", 0)
         ambiguous_steps = dynamic_builder.resolution_counts.get("ambiguous", 0)
-        unmapped_steps = dynamic_builder.resolution_counts.get("unmapped", 0)
+        unresolved_steps = dynamic_builder.resolution_counts.get("unresolved", 0)
         total_steps = len(trace_sequence)
 
         file_promoted = False
@@ -110,13 +110,13 @@ class TraceService:
                     f"{total_steps} steps | "
                     f"resolved {resolved_steps} | "
                     f"ambiguous {ambiguous_steps} | "
-                    f"unmapped {unmapped_steps}"
+                    f"unresolved {unresolved_steps}"
                 ),
                 trace_seq_path=str(trace_path),
                 total_steps=total_steps,
                 resolved_steps=resolved_steps,
                 ambiguous_steps=ambiguous_steps,
-                unmapped_steps=unmapped_steps,
+                unresolved_steps=unresolved_steps,
                 commit=False
             )
 

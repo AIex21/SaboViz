@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks
 from pathlib import Path
 from app.core.database import SessionLocal
+from app.core.storage_paths import HOST_DATA_PATH, FULL_PROJECT_SNIPPETS_FILENAME
 from app.repositories.graph_repo import GraphRepository
 from app.services.sabo_gen.builder import SaboGraphBuilder
 from app.models.graph import Project, Node, Edge
@@ -10,6 +11,9 @@ from app.models.graph import Project, Node, Edge
 class IngestService:
     def __init__(self, db: Session):
         self.repo = GraphRepository(db)
+
+    def is_static_graph_export(self, payload: dict) -> bool:
+        return payload.get("format") == "saboviz-static-graph"
 
     def create_project_entry(
         self,
@@ -43,6 +47,7 @@ class IngestService:
                 "id": data["id"],
                 "labels": data.get("labels", []),
                 "properties": data.get("properties", {}),
+                "ai_summary": data.get("ai_summary"),
                 "parent_id": data.get("parent") or None,
                 "ancestors": data.get("ancestors", []),
                 "hasChildren": data.get("hasChildren", False)
@@ -63,6 +68,25 @@ class IngestService:
         repo.bulk_create_edges(edges)
 
         return len(nodes), len(edges)
+
+    def save_snippets_data(self, project_id: int, snippets: dict | None):
+        if not isinstance(snippets, dict):
+            return
+
+        serialized_snippets = {}
+        for node_id, code in snippets.items():
+            if isinstance(node_id, str) and isinstance(code, str):
+                serialized_snippets[node_id] = code
+
+        if not serialized_snippets:
+            return
+
+        project_dir = HOST_DATA_PATH / str(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        snippets_path = project_dir / FULL_PROJECT_SNIPPETS_FILENAME
+        with open(snippets_path, "w", encoding="utf-8") as snippets_file:
+            json.dump(serialized_snippets, snippets_file, ensure_ascii=False)
     
     def process_m3_file(self, project_id: int, m3_content: dict, run_summarization: bool = True):
         with SessionLocal() as db:
@@ -97,6 +121,7 @@ class IngestService:
             try:
                 repo.change_project_status(project_id, "processing", "Importing JSON...")
                 nodes_len, edges_len = self.save_graph_data(repo, project_id, lpg_content.get("elements", {}))
+                self.save_snippets_data(project_id, lpg_content.get("snippets"))
 
                 if run_summarization:
                     summarization_service.run_summarization(project_id)

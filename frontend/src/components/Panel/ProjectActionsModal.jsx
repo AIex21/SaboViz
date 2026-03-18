@@ -2,7 +2,15 @@ import React from 'react';
 import { THEME } from '../../config/graphConfig';
 import ModalButton from '../Common/ModalButton';
 
-const ProjectActionsModal = ({ project, onClose, onRerunSummarization, onAddTrace, onViewTraces, onExtractFeatures }) => {
+const ProjectActionsModal = ({
+    project,
+    onClose,
+    onRerunSummarization,
+    onAddTrace,
+    onViewTraces,
+    onExtractFeatures,
+    onExportStatic
+}) => {
     return (
         <div style={styles.overlay} onClick={onClose}>
             <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -35,6 +43,11 @@ const ProjectActionsModal = ({ project, onClose, onRerunSummarization, onAddTrac
                         <button style={styles.actionTile} onClick={onRerunSummarization}>
                             <div style={styles.tileTitle}>Run Summarization</div>
                             <div style={styles.tileDescription}>Generate AI summaries for the whole graph.</div>
+                        </button>
+
+                        <button style={styles.actionTile} onClick={onExportStatic}>
+                            <div style={styles.tileTitle}>Export Static Graph</div>
+                            <div style={styles.tileDescription}>Download nodes and edges only, so you can re-import without parsing source files.</div>
                         </button>
                     </div>
                 </div>

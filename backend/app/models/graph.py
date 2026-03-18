@@ -68,7 +68,7 @@ class Trace(Base):
     total_steps = Column(Integer, nullable=False, default=0)
     resolved_steps = Column(Integer, nullable=False, default=0)
     ambiguous_steps = Column(Integer, nullable=False, default=0)
-    unmapped_steps = Column(Integer, nullable=False, default=0)
+    unresolved_steps = Column(Integer, nullable=False, default=0)
 
     trace_seq_path = Column(String)
 

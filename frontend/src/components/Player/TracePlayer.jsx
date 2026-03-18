@@ -14,19 +14,19 @@ const TracePlayer = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [showAmbiguousMarkers, setShowAmbiguousMarkers] = useState(false);
-  const [showUnmappedMarkers, setShowUnmappedMarkers] = useState(false);
+  const [showUnresolvedMarkers, setShowUnresolvedMarkers] = useState(false);
 
-  const { ambiguousIndices, unmappedIndices } = useMemo(() => {
+  const { ambiguousIndices, unresolvedIndices } = useMemo(() => {
     const ambiguous = [];
-    const unmapped = [];
+    const unresolved = [];
 
     traceSteps.forEach((step, index) => {
       const status = String(step?.data?.properties?.operationResolution || "").toLowerCase();
       if (status === "ambiguous") ambiguous.push(index);
-      if (status === "unmapped") unmapped.push(index);
+      if (status === "unresolved") unresolved.push(index);
     });
 
-    return { ambiguousIndices: ambiguous, unmappedIndices: unmapped };
+    return { ambiguousIndices: ambiguous, unresolvedIndices: unresolved };
   }, [traceSteps]);
 
   // Auto-play logic
@@ -149,13 +149,13 @@ const TracePlayer = ({
                     }}
                   />
                 ))}
-                {showUnmappedMarkers && unmappedIndices.map((idx) => (
+                {showUnresolvedMarkers && unresolvedIndices.map((idx) => (
                   <div
-                    key={`unmapped_${idx}`}
-                    title={`Unmapped at step ${idx + 1}`}
+                    key={`unresolved_${idx}`}
+                    title={`Unresolved at step ${idx + 1}`}
                     onClick={() => onStepChange(idx)}
                     style={{
-                      ...styles.unmappedMarker,
+                      ...styles.unresolvedMarker,
                       left: `${(idx / Math.max(1, totalSteps - 1)) * 100}%`,
                     }}
                   />
@@ -173,11 +173,11 @@ const TracePlayer = ({
                 </button>
                 <button
                   type="button"
-                  style={styles.markerToggleBtn(showUnmappedMarkers, "unmapped")}
-                  onClick={() => setShowUnmappedMarkers((prev) => !prev)}
+                  style={styles.markerToggleBtn(showUnresolvedMarkers, "unresolved")}
+                  onClick={() => setShowUnresolvedMarkers((prev) => !prev)}
                 >
                   <span style={styles.markerDot(THEME.danger)}></span>
-                  Unmapped ({unmappedIndices.length})
+                  Unresolved ({unresolvedIndices.length})
                 </button>
               </div>
 
@@ -322,7 +322,7 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 0 4px rgba(245, 158, 11, 0.6)",
   },
-  unmappedMarker: {
+  unresolvedMarker: {
     position: "absolute",
     top: "4px",
     width: "3px",

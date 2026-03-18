@@ -21,7 +21,7 @@ class TraceRepository:
         total_steps: int = 0,
         resolved_steps: int = 0,
         ambiguous_steps: int = 0,
-        unmapped_steps: int = 0,
+        unresolved_steps: int = 0,
         commit: bool = True,
     ):
         trace = Trace(
@@ -32,7 +32,7 @@ class TraceRepository:
             total_steps=total_steps,
             resolved_steps=resolved_steps,
             ambiguous_steps=ambiguous_steps,
-            unmapped_steps=unmapped_steps,
+            unresolved_steps=unresolved_steps,
         )
         self.db.add(trace)
         if commit:

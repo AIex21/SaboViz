@@ -89,6 +89,16 @@ def get_aggregated_edges(
 ):
     return {"edges": service.get_aggregated_edges(project_id, visible_ids)}
 
+@router.get("/projects/{project_id}/export-static")
+def export_static_project(
+    project_id: int,
+    service: GraphService = Depends(get_service)
+):
+    payload = service.export_static_graph(project_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return payload
+
 @router.post("/projects/upload", response_model=ProjectSummary)
 async def upload_project(
     background_tasks: BackgroundTasks,
@@ -122,11 +132,15 @@ async def upload_project(
                 run_summarization
             )
         elif "elements" in json_content:
+            effective_run_summarization = run_summarization
+            if service.is_static_graph_export(json_content):
+                effective_run_summarization = False
+
             background_tasks.add_task(
                 service.ingest_lpg_file,
                 project.id,
                 json_content,
-                run_summarization
+                effective_run_summarization
             )
         else:
             raise HTTPException(status_code=400, detail="Unknown JSON format.")

@@ -36,6 +36,11 @@ export const projectApi = {
         return response.data;
     },
 
+    exportStaticProject: async (projectId) => {
+        const response = await api.get(`/projects/${projectId}/export-static`);
+        return response.data;
+    },
+
     deleteProject: async (projectId) => {
         const response = await api.delete('/projects/' + projectId);
         return response.data;
@@ -88,9 +93,15 @@ export const projectApi = {
         return response.data;
     },
 
-    uploadTrace: async (projectId, file) => {
+    uploadTrace: async (projectId, files) => {
         const formData = new FormData();
-        formData.append('file', file);
+
+        const fileList = Array.isArray(files) ? files : [files];
+        if (fileList.length === 1) {
+            formData.append('file', fileList[0]);
+        } else {
+            fileList.forEach((file) => formData.append('files', file));
+        }
 
         const response = await api.post(`/projects/${projectId}/traces`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }

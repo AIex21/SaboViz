@@ -5,19 +5,19 @@ import { useToast } from '../../context/ToastContext';
 
 const TraceUploadModal = ({ project, onClose, onUpload }) => {
     const { showToast } = useToast();
-    const [file, setFile] = useState(null);
+    const [files, setFiles] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!file) {
-            showToast("Please select a file first", "warning");
+        if (!files.length) {
+            showToast("Please select at least one file first", "warning");
             return;
         }
 
         setIsLoading(true);
         try {
-            await onUpload(project.id, file);
+            await onUpload(project.id, files);
             onClose();
         } catch (error) {
             console.error(error);
@@ -38,17 +38,28 @@ const TraceUploadModal = ({ project, onClose, onUpload }) => {
                 {/* Body */}
                 <div style={styles.body}>
                     <p style={styles.description}>
-                        Upload a <strong>.log</strong> file containing execution traces to analyze the runtime behavior of this system.
+                        Upload one or more <strong>.log</strong> files containing execution traces to analyze the runtime behavior of this system.
                     </p>
 
                     <div style={styles.dropZone}>
                         <label style={styles.fileLabel}>
                             <span style={{fontSize: '24px', marginBottom: '8px'}}>📄</span>
-                            <span>{file ? file.name : "Click to select a .log file"}</span>
+                            <span>
+                                {files.length
+                                    ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
+                                    : "Click to select one or more trace files"}
+                            </span>
+                            {files.length > 0 && (
+                                <span style={styles.fileNamesPreview}>
+                                    {files.slice(0, 3).map((file) => file.name).join(', ')}
+                                    {files.length > 3 ? ` (+${files.length - 3} more)` : ''}
+                                </span>
+                            )}
                             <input 
                                 type="file" 
                                 accept=".log,.txt,.json"
-                                onChange={(e) => setFile(e.target.files[0])}
+                                multiple
+                                onChange={(e) => setFiles(Array.from(e.target.files || []))}
                                 style={{display: 'none'}}
                             />
                         </label>
@@ -63,9 +74,9 @@ const TraceUploadModal = ({ project, onClose, onUpload }) => {
                     <ModalButton 
                         variant="primary" 
                         onClick={handleSubmit} 
-                        disabled={!file || isLoading}
+                        disabled={!files.length || isLoading}
                     >
-                        {isLoading ? 'Uploading...' : 'Upload Trace'}
+                        {isLoading ? 'Uploading...' : 'Upload Trace(s)'}
                     </ModalButton>
                 </div>
             </div>
@@ -114,6 +125,12 @@ const styles = {
     fileLabel: {
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '30px', cursor: 'pointer', color: THEME.textMain, fontSize: '14px', fontWeight: 500
+    },
+    fileNamesPreview: {
+        marginTop: '8px',
+        color: THEME.textMuted,
+        fontSize: '12px',
+        textAlign: 'center'
     },
     footer: {
         padding: '20px 24px',

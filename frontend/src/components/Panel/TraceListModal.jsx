@@ -65,7 +65,7 @@ const TraceListModal = ({ project, onClose }) => {
         return (
             (trace.resolved_steps || 0) +
             (trace.ambiguous_steps || 0) +
-            (trace.unmapped_steps || 0)
+            (trace.unresolved_steps || 0)
         );
     }
 
@@ -115,7 +115,7 @@ const TraceListModal = ({ project, onClose }) => {
                                             <span style={styles.metricChipNeutral}>Steps {getTotalSteps(trace)}</span>
                                             <span style={styles.metricChipSuccess}>Resolved {trace.resolved_steps || 0}</span>
                                             <span style={styles.metricChipWarn}>Ambiguous {trace.ambiguous_steps || 0}</span>
-                                            <span style={styles.metricChipDanger}>Unmapped {trace.unmapped_steps || 0}</span>
+                                            <span style={styles.metricChipDanger}>Unresolved {trace.unresolved_steps || 0}</span>
                                         </div>
                                     </div>
 

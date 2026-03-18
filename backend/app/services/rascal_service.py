@@ -9,13 +9,8 @@ from fastapi import HTTPException
 
 from app.services.ingest_service import IngestService
 from app.core.database import SessionLocal
+from app.core.storage_paths import HOST_DATA_PATH, FULL_PROJECT_MODEL_FILENAME, FULL_PROJECT_SNIPPETS_FILENAME, SHARED_VOL_NAME, SHARED_LIBS_NAME, RASCAL_IMAGE
 from app.repositories.graph_repo import GraphRepository
-
-SHARED_VOL_NAME = os.getenv("SHARED_DATA_VOLUME", "sabo_shared_data")
-SHARED_LIBS_NAME = os.getenv("SHARED_LIBS_VOLUME", "sabo_shared_libs")
-RASCAL_IMAGE = os.getenv("RASCAL_IMAGE_NAME", "sabo-rascal-parser:latest")
-
-HOST_DATA_PATH = Path("/sabo-data")
 
 class RascalService:
     def __init__(self):
@@ -95,12 +90,12 @@ class RascalService:
                 raise Exception(f"Parser failed with code {result['StatusCode']}.\nLogs:\n{logs[-500:]}")
             
             bits_m3, stat_m3 = container.get_archive("/app/models/composed/FullProject.json")
-            m3_path = HOST_DATA_PATH / str(project_id) / "FullProject.json"
-            self.write_tar_to_disk(bits_m3, m3_path, "FullProject.json")
+            m3_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_MODEL_FILENAME
+            self.write_tar_to_disk(bits_m3, m3_path, FULL_PROJECT_MODEL_FILENAME)
 
             bits_snip, stat_snip = container.get_archive("/app/models/composed/FullProject_snippets.json")
-            snip_path = HOST_DATA_PATH / str(project_id) / "FullProject_snippets.json"
-            self.write_tar_to_disk(bits_snip, snip_path, "FullProject_snippets.json")
+            snip_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_SNIPPETS_FILENAME
+            self.write_tar_to_disk(bits_snip, snip_path, FULL_PROJECT_SNIPPETS_FILENAME)
 
             return m3_path
         
@@ -124,7 +119,7 @@ class RascalService:
             print(f"[{project_id}] Warning: Failed to delete workspace files: {e}")
         
     def get_analysis_file(self, project_id: int) -> Path:
-        file_path = HOST_DATA_PATH / str(project_id) / "FullProject.json"
+        file_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_MODEL_FILENAME
         if not file_path.exists():
             raise FileNotFoundError(f"Analysis result not found for project {project_id}")
             

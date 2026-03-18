@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Union
 
 from app.core.database import get_db
 from app.core.exceptions import TraceValidationError
@@ -41,18 +41,29 @@ def get_trace_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/projects/{project_id}/traces", response_model=TraceSummary)
+@router.post("/projects/{project_id}/traces", response_model=Union[TraceSummary, List[TraceSummary]])
 def upload_trace(
     project_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
+    files: List[UploadFile] | None = File(default=None),
     service: TraceService = Depends(get_trace_service),
     graph_service: GraphService = Depends(get_graph_service)
 ):
     if not graph_service.get_project_by_id(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
+
+    uploads: List[UploadFile] = []
+    if file is not None:
+        uploads.append(file)
+    if files:
+        uploads.extend(files)
+
+    if not uploads:
+        raise HTTPException(status_code=422, detail="No trace files were provided")
     
     try:
-        return service.process_trace_file(project_id, file)
+        processed = [service.process_trace_file(project_id, upload) for upload in uploads]
+        return processed[0] if len(processed) == 1 else processed
     except TraceValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:

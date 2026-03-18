@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Set
 from app.models.graph import Node, Edge
 from app.services.graph_service import GraphService
 from app.services.llm_summarization.llm_client import LLMClient
-from app.services.rascal_service import HOST_DATA_PATH
+from app.core.storage_paths import HOST_DATA_PATH, FULL_PROJECT_SNIPPETS_FILENAME
 from app.services.llm_summarization.llm_templates import (
     analyze_operation_tool,
     analyze_type_tool,
@@ -58,7 +58,7 @@ class SummarizationService:
             if e.source_id in self.outbound_edges:
                 self.outbound_edges[e.source_id].append(e)
 
-        snippets_path = HOST_DATA_PATH / str(project_id) / "FullProject_snippets.json"
+        snippets_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_SNIPPETS_FILENAME
         if snippets_path.exists():
             with open(snippets_path, 'r', encoding='utf-8') as f:
                 self.snippets = json.load(f)

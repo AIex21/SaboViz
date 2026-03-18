@@ -1,7 +1,10 @@
+import json
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 from app.repositories.graph_repo import GraphRepository
 from app.services.rascal_service import RascalService
+from app.core.storage_paths import HOST_DATA_PATH, FULL_PROJECT_SNIPPETS_FILENAME
 from app.core.database import SessionLocal
 from app.models.graph import Node, Edge
 
@@ -77,3 +80,60 @@ class GraphService:
     
     def get_batch_hierarchy(self, project_id: int, node_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         return self.repo.get_batch_hierarchy(project_id, node_ids)
+
+    def export_static_graph(self, project_id: int) -> dict | None:
+        project = self.repo.get_project_by_id(project_id)
+        if not project:
+            return None
+
+        nodes = self.repo.get_all_nodes(project_id)
+        edges = self.repo.get_all_edges(project_id)
+
+        exported_nodes = []
+        for node in nodes:
+            exported_nodes.append({
+                "data": {
+                    "id": node.id,
+                    "labels": node.labels or [],
+                    "properties": node.properties or {},
+                    "parent": node.parent_id,
+                    "ancestors": node.ancestors or [],
+                    "hasChildren": bool(node.hasChildren),
+                    "ai_summary": node.ai_summary,
+                }
+            })
+
+        exported_edges = []
+        for edge in edges:
+            exported_edges.append({
+                "data": {
+                    "source": edge.source_id,
+                    "target": edge.target_id,
+                    "label": edge.label,
+                }
+            })
+
+        snippets = {}
+        snippets_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_SNIPPETS_FILENAME
+        if snippets_path.exists():
+            try:
+                with open(snippets_path, "r", encoding="utf-8") as snippets_file:
+                    loaded = json.load(snippets_file)
+                    if isinstance(loaded, dict):
+                        snippets = loaded
+            except Exception:
+                snippets = {}
+
+        return {
+            "format": "saboviz-static-graph",
+            "version": "1.0",
+            "project": {
+                "name": project.name,
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "elements": {
+                "nodes": exported_nodes,
+                "edges": exported_edges,
+            },
+            "snippets": snippets,
+        }
