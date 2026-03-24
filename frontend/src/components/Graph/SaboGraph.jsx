@@ -176,6 +176,15 @@ const SaboGraph = ({
         });
     }, [data, edgeVisibility]);
 
+    const hasPresetNodePositions = useMemo(() => {
+        return elements.some((ele) => {
+            if (ele?.data?.source) return false;
+            const x = Number(ele?.position?.x);
+            const y = Number(ele?.position?.y);
+            return Number.isFinite(x) && Number.isFinite(y);
+        });
+    }, [elements]);
+
     // --- HELPER: Find the Visible Ancestor ---
     const getVisibleNodeId = (targetId) => {
         if (!targetId || !cyInstance) return null;
@@ -319,6 +328,18 @@ const SaboGraph = ({
              const newNodes = nodes.filter(n => !previousNodeIds.has(n.id()));
 
              if (!hasInitialLayoutRunRef.current || retainedCount === 0) {
+                if (hasPresetNodePositions) {
+                    const allNodes = cyInstance.nodes();
+                    if (allNodes.length > 0) {
+                        cyInstance.fit(allNodes, 50);
+                    }
+
+                    knownNodeIdsRef.current = currentNodeIds;
+                    hasInitialLayoutRunRef.current = true;
+                    if (onPositionsSnapshot) onPositionsSnapshot(exportNodePositions());
+                    return;
+                }
+
                 const initialLayout = cyInstance.layout({ 
                     ...layoutOptions, 
                     name: 'fcose', 
@@ -457,7 +478,7 @@ const SaboGraph = ({
 
         const timer = setTimeout(runLayout, 100);
         return () => clearTimeout(timer);
-    }, [cyInstance, elements, onPositionsSnapshot]);
+    }, [cyInstance, elements, onPositionsSnapshot, hasPresetNodePositions]);
 
     useEffect(() => {
         if (!cyInstance) return;

@@ -8,6 +8,52 @@ import { useToast } from "../../context/ToastContext";
 
 const BUFFER_SIZE = 100;
 const ROOT_AGGREGATE_BUCKET_ID = "__agg_root__";
+const GRAPH_STATE_STORAGE_VERSION = 1;
+const AGGREGATE_VISUAL_PRIORITY = ["Project", "Folder", "File", "Type", "Scope", "Operation"];
+
+const getGraphStateStorageKey = (projectId) => `graph-page-state:v${GRAPH_STATE_STORAGE_VERSION}:${projectId}`;
+
+const toStringIdSet = (arr) => new Set(Array.isArray(arr) ? arr.map((v) => String(v)) : []);
+const toSet = (arr) => new Set(Array.isArray(arr) ? arr : []);
+
+const sanitizeNodePositions = (positions) => {
+  if (!positions || typeof positions !== "object") return {};
+
+  const next = {};
+  Object.entries(positions).forEach(([nodeId, pos]) => {
+    const x = Number(pos?.x);
+    const y = Number(pos?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    next[String(nodeId)] = { x, y };
+  });
+
+  return next;
+};
+
+const loadPersistedGraphState = (storageKey) => {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.version !== GRAPH_STATE_STORAGE_VERSION) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const persistGraphState = (storageKey, state) => {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      version: GRAPH_STATE_STORAGE_VERSION,
+      updatedAt: Date.now(),
+      ...state,
+    }));
+  } catch (error) {
+    console.warn("Failed to persist graph state:", error);
+  }
+};
 
 const elementKey = (el) => {
   if (!el?.data?.source) return `n:${String(el?.data?.id)}`;
@@ -51,11 +97,28 @@ const sanitizeEdgesByPresentNodes = (elements) => {
   return [...nodes, ...safeEdges];
 };
 
+const getAggregateVisualClass = (members) => {
+  if (!Array.isArray(members) || members.length === 0) return "Folder";
+
+  const labels = new Set(
+    members
+      .map((member) => String(member?.data?.label || ""))
+      .filter(Boolean)
+  );
+
+  for (const candidate of AGGREGATE_VISUAL_PRIORITY) {
+    if (labels.has(candidate)) return candidate;
+  }
+
+  return "Folder";
+};
+
 function GraphPage() {
   const { showToast } = useToast();
   const { id } = useParams();
   const navigate = useNavigate();
   const projectId = parseInt(id);
+  const graphStateStorageKey = useMemo(() => getGraphStateStorageKey(projectId), [projectId]);
 
   const [graphElements, setGraphElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,11 +144,34 @@ function GraphPage() {
   const isFetchingHierarchy = useRef(false);
   const nodePositionsRef = useRef({});
 
+  const saveGraphProgress = () => {
+    persistGraphState(graphStateStorageKey, {
+      graphElements,
+      nodePositions: nodePositionsRef.current,
+      expandedNodeIds: Array.from(expandedNodeIds),
+      loadedParentIds: Array.from(loadedParentIds),
+      lockedNodeIds: Array.from(lockedNodeIds),
+      revealedAggregatedNodeIds: Array.from(revealedAggregatedNodeIds),
+      shownAggregatedMemberDeps,
+      edgeFocusNodeIds: Array.from(edgeFocusNodeIds),
+      activeFeatureIds: Array.from(activeFeatureIds),
+      selectedTraceId,
+      currentStepIndex,
+    });
+  };
+
+  const handleBackToDashboard = () => {
+    saveGraphProgress();
+    navigate('/');
+  };
+
   // Data Loading
   useEffect(() => {
     const loadRoots = async () => {
       setIsLoading(true);
       try {
+        const persistedState = loadPersistedGraphState(graphStateStorageKey);
+
         const [projectMeta, rootData, traces, featureList] = await Promise.all([
              projectApi.getProject(projectId),
              projectApi.getRoots(projectId),
@@ -97,6 +183,57 @@ function GraphPage() {
         setProjectStatus(projectMeta.status);
         setAvailableTraces(traces);
         setFeatures(featureList);
+
+        if (persistedState?.graphElements?.length > 0) {
+          const restoredPositions = sanitizeNodePositions(persistedState.nodePositions);
+          nodePositionsRef.current = restoredPositions;
+
+          const restoredElementsWithPositions = persistedState.graphElements.map((el) => {
+            if (el?.data?.source) return el;
+
+            const nodeId = String(el?.data?.id);
+            const restoredPos = restoredPositions[nodeId];
+            if (!restoredPos) return el;
+
+            return {
+              ...el,
+              position: restoredPos,
+            };
+          });
+
+          setGraphElements(sanitizeEdgesByPresentNodes(mergeUniqueElements(restoredElementsWithPositions)));
+          setExpandedNodeIds(toStringIdSet(persistedState.expandedNodeIds));
+          setLoadedParentIds(toStringIdSet(persistedState.loadedParentIds));
+          setLockedNodeIds(toStringIdSet(persistedState.lockedNodeIds));
+          setRevealedAggregatedNodeIds(toStringIdSet(persistedState.revealedAggregatedNodeIds));
+          setShownAggregatedMemberDeps(
+            persistedState.shownAggregatedMemberDeps && typeof persistedState.shownAggregatedMemberDeps === "object"
+              ? persistedState.shownAggregatedMemberDeps
+              : {}
+          );
+          setEdgeFocusNodeIds(toStringIdSet(persistedState.edgeFocusNodeIds));
+          setActiveFeatureIds(toSet(persistedState.activeFeatureIds));
+
+          const restoredTraceId = Number(persistedState.selectedTraceId) || 0;
+          const restoredStep = Math.max(0, Number(persistedState.currentStepIndex) || 0);
+
+          if (restoredTraceId > 0) {
+            setSelectedTraceId(restoredTraceId);
+            setCurrentStepIndex(restoredStep);
+
+            try {
+              const fullContent = await projectApi.getTraceFile(restoredTraceId);
+              setTraceDataMap((prev) => ({ ...prev, [restoredTraceId]: fullContent }));
+            } catch (error) {
+              console.error("Failed to restore trace file:", error);
+            }
+          } else {
+            setSelectedTraceId("");
+            setCurrentStepIndex(0);
+          }
+
+          return;
+        }
 
         const cyNodes = rootData.nodes.map(n => formatNode(n));
         const cyEdges = rootData.edges.map(e => formatEdge(e));
@@ -128,7 +265,7 @@ function GraphPage() {
     };
 
     loadRoots();
-  }, [projectId, showToast]);
+  }, [projectId, showToast, graphStateStorageKey]);
 
   useEffect(() => {
     if (projectStatus !== 'summarizing') return;
@@ -712,7 +849,17 @@ function GraphPage() {
             .filter(Boolean);
 
           let aggregatePosition = null;
-          if (knownPositions.length > 0) {
+          const persistedAggregatePosition = nodePositionsRef.current[bucketId];
+          if (
+            persistedAggregatePosition &&
+            Number.isFinite(Number(persistedAggregatePosition.x)) &&
+            Number.isFinite(Number(persistedAggregatePosition.y))
+          ) {
+            aggregatePosition = {
+              x: Number(persistedAggregatePosition.x),
+              y: Number(persistedAggregatePosition.y),
+            };
+          } else if (knownPositions.length > 0) {
             const sum = knownPositions.reduce(
               (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
               { x: 0, y: 0 }
@@ -751,6 +898,7 @@ function GraphPage() {
           const aggregateDisplayName = isParentScopedBucket
             ? `aggregated (${bucketMembers.length})`
             : `aggregated-outside (${bucketMembers.length})`;
+          const aggregateVisualClass = getAggregateVisualClass(bucketMembers);
 
           filteredNodes.push({
             data: {
@@ -769,7 +917,7 @@ function GraphPage() {
                 : null,
             },
             ...(aggregatePosition ? { position: aggregatePosition } : {}),
-            classes: "AggregatedNode",
+            classes: `AggregatedNode ${aggregateVisualClass}`,
           });
         });
 
@@ -995,7 +1143,17 @@ function GraphPage() {
             .filter(Boolean);
 
           let aggregatePosition = null;
-          if (knownPositions.length > 0) {
+          const persistedAggregatePosition = nodePositionsRef.current[bucketId];
+          if (
+            persistedAggregatePosition &&
+            Number.isFinite(Number(persistedAggregatePosition.x)) &&
+            Number.isFinite(Number(persistedAggregatePosition.y))
+          ) {
+            aggregatePosition = {
+              x: Number(persistedAggregatePosition.x),
+              y: Number(persistedAggregatePosition.y),
+            };
+          } else if (knownPositions.length > 0) {
             const sum = knownPositions.reduce(
               (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
               { x: 0, y: 0 }
@@ -1008,6 +1166,7 @@ function GraphPage() {
           }
 
           const isParentScopedBucket = bucketId.startsWith("__agg_parent__");
+          const aggregateVisualClass = getAggregateVisualClass(bucketMembers);
           filteredNodes.push({
             data: {
               id: bucketId,
@@ -1021,7 +1180,7 @@ function GraphPage() {
               aggregateContextLabel: "feature scope",
             },
             ...(aggregatePosition ? { position: aggregatePosition } : {}),
-            classes: "AggregatedNode",
+            classes: `AggregatedNode ${aggregateVisualClass}`,
           });
         });
 
@@ -1187,7 +1346,7 @@ function GraphPage() {
       {/* --- HEADER --- */}
       <div style={styles.header}>
         <div style={styles.leftGroup}>
-            <button onClick={() => navigate('/')} style={styles.backBtn} title="Back to Dashboard">
+            <button onClick={handleBackToDashboard} style={styles.backBtn} title="Back to Dashboard">
                 ←
             </button>
             <div style={styles.divider}></div>

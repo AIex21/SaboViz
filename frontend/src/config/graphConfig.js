@@ -220,6 +220,62 @@ export const saboStylesheet = [
         }
     },
 
+    {
+        selector: '.AggregatedNode.Folder, .AggregatedNode.Project',
+        style: {
+            'shape': 'round-rectangle',
+            'background-color': 'rgba(71, 85, 105, 0.34)',
+            'border-color': 'rgba(148, 163, 184, 0.9)',
+            'min-width': 82,
+            'min-height': 36
+        }
+    },
+
+    {
+        selector: '.AggregatedNode.File',
+        style: {
+            'shape': 'round-rectangle',
+            'background-color': 'rgba(34, 139, 230, 0.28)',
+            'border-color': 'rgba(116, 192, 252, 0.95)'
+        }
+    },
+
+    {
+        selector: '.AggregatedNode.Type',
+        style: {
+            'shape': 'round-rectangle',
+            'background-color': 'rgba(253, 126, 20, 0.24)',
+            'border-color': 'rgba(255, 169, 77, 0.95)'
+        }
+    },
+
+    {
+        selector: '.AggregatedNode.Scope',
+        style: {
+            'shape': 'cut-rectangle',
+            'background-color': 'rgba(121, 80, 242, 0.22)',
+            'border-color': 'rgba(177, 151, 252, 0.95)'
+        }
+    },
+
+    {
+        selector: '.AggregatedNode.Operation',
+        style: {
+            'shape': 'ellipse',
+            'width': 12,
+            'height': 12,
+            'min-width': 12,
+            'min-height': 12,
+            'padding': 0,
+            'background-color': 'rgba(18, 184, 134, 0.25)',
+            'border-color': 'rgba(56, 217, 169, 0.95)',
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'text-margin-y': 6,
+            'text-background-opacity': 0
+        }
+    },
+
     // ================================================================
     // 3. CONTAINER STATES (Overrides for Parents)
     // ================================================================
