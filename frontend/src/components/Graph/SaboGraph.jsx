@@ -33,7 +33,9 @@ const SaboGraph = ({
     failureIndices,
     isDecomposing,
     isProjectSummarizing,
-    onSummarizeNode
+    onSummarizeNode,
+    onRevealAggregatedMember,
+    onRevealAggregatedMemberDependencies
 }) => {
     const [selectedElement, setSelectedElement] = useState(null);
     const [cyInstance, setCyInstance] = useState(null);
@@ -520,6 +522,21 @@ const SaboGraph = ({
         };
     }, [cyInstance, onToggleExpand, onPositionsSnapshot]);
 
+    useEffect(() => {
+        if (!cyInstance || !selectedElement?.id) return;
+
+        const selectedId = String(selectedElement.id);
+        const currentElement = cyInstance.getElementById(selectedId);
+
+        if (currentElement.length > 0) {
+            setSelectedElement({ ...currentElement.data() });
+            return;
+        }
+
+        // If the selected item disappeared after a graph update, close the panel.
+        setSelectedElement(null);
+    }, [cyInstance, elements, selectedElement?.id]);
+
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative', background: THEME.bg }}>
             <SidebarPanel 
@@ -556,6 +573,8 @@ const SaboGraph = ({
                 activeTraceAction={currentAction}
                 features={features}
                 isProjectSummarizing={isProjectSummarizing}
+                onRevealAggregatedMember={onRevealAggregatedMember}
+                onRevealAggregatedMemberDependencies={onRevealAggregatedMemberDependencies}
                 onSummarizeNode={async (nodeId) => {
                     if (!onSummarizeNode) return null;
                     const summary = await onSummarizeNode(nodeId);

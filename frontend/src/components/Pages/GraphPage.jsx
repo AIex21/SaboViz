@@ -7,6 +7,7 @@ import { THEME } from "../../config/graphConfig";
 import { useToast } from "../../context/ToastContext";
 
 const BUFFER_SIZE = 100;
+const ROOT_AGGREGATE_BUCKET_ID = "__agg_root__";
 
 const elementKey = (el) => {
   if (!el?.data?.source) return `n:${String(el?.data?.id)}`;
@@ -61,6 +62,8 @@ function GraphPage() {
   const [projectName, setProjectName] = useState("Loading...");
   const [projectStatus, setProjectStatus] = useState("ready");
   const [lockedNodeIds, setLockedNodeIds] = useState(new Set());
+  const [revealedAggregatedNodeIds, setRevealedAggregatedNodeIds] = useState(new Set());
+  const [shownAggregatedMemberDeps, setShownAggregatedMemberDeps] = useState({});
   const [edgeFocusNodeIds, setEdgeFocusNodeIds] = useState(new Set());
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set());
   const [loadedParentIds, setLoadedParentIds] = useState(new Set());
@@ -113,6 +116,8 @@ function GraphPage() {
         setEdgeFocusNodeIds(new Set());
         setExpandedNodeIds(new Set());
         setLoadedParentIds(new Set());
+        setRevealedAggregatedNodeIds(new Set());
+        setShownAggregatedMemberDeps({});
       } catch (error) {
         console.error("Error loading graph data:", error);
         setProjectName("Error Loading Project");
@@ -442,6 +447,57 @@ function GraphPage() {
     });
   };
 
+  useEffect(() => {
+    if (lockedNodeIds.size === 0 && revealedAggregatedNodeIds.size > 0) {
+      setRevealedAggregatedNodeIds(new Set());
+    }
+    if (lockedNodeIds.size === 0) {
+      setShownAggregatedMemberDeps({});
+    }
+  }, [lockedNodeIds, revealedAggregatedNodeIds]);
+
+  const handleRevealAggregatedMember = (memberId) => {
+    const memberIdStr = String(memberId);
+    setRevealedAggregatedNodeIds((prev) => {
+      const next = new Set(prev);
+      next.add(memberIdStr);
+      return next;
+    });
+
+    setShownAggregatedMemberDeps((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        if (key.endsWith(`::${memberIdStr}`)) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleRevealAggregatedMemberDependencies = (aggregateNodeId, memberId, lockedEdgesByNeighbor = {}) => {
+    const aggregateNodeIdStr = String(aggregateNodeId || "");
+    const memberIdStr = String(memberId || "");
+    if (!aggregateNodeIdStr || !memberIdStr) return;
+
+    const key = `${aggregateNodeIdStr}::${memberIdStr}`;
+
+    setShownAggregatedMemberDeps((prev) => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+        return next;
+      }
+
+      next[key] = {
+        aggregateNodeId: aggregateNodeIdStr,
+        memberId: memberIdStr,
+        lockedEdgesByNeighbor: lockedEdgesByNeighbor || {},
+      };
+      return next;
+    });
+  };
+
   const toggleEdgeFocus = (nodeId) => {
     setEdgeFocusNodeIds((prev) => {
       const next = new Set(prev);
@@ -476,12 +532,545 @@ function GraphPage() {
         descendants.forEach((d) => lockedScope.add(String(d)));
       });
 
-      // Keep all visible nodes, only constrain edges to the locked scope.
-      filteredEdges = filteredEdges.filter((e) => {
-        const src = String(e.data.source);
-        const tgt = String(e.data.target);
-        return lockedScope.has(src) && lockedScope.has(tgt);
+      const keptNodes = [];
+      const aggregatedMembers = [];
+      const visibleNodeById = new Map(filteredNodes.map((n) => [String(n.data.id), n]));
+
+      const resolveAggregateBucketId = (node) => {
+        let parentId = node?.data?.parent != null ? String(node.data.parent) : null;
+
+        while (parentId) {
+          if (expandedNodeIds.has(parentId) && !lockedScope.has(parentId)) {
+            return `__agg_parent__${parentId}`;
+          }
+
+          const parentNode = visibleNodeById.get(parentId);
+          parentId = parentNode?.data?.parent != null ? String(parentNode.data.parent) : null;
+        }
+
+        return ROOT_AGGREGATE_BUCKET_ID;
+      };
+
+      filteredNodes.forEach((node) => {
+        const nodeId = String(node.data.id);
+        const keepAsRealNode =
+          lockedScope.has(nodeId) ||
+          expandedNodeIds.has(nodeId) ||
+          revealedAggregatedNodeIds.has(nodeId);
+
+        if (keepAsRealNode) keptNodes.push(node);
+        else aggregatedMembers.push(node);
       });
+
+      const keptNodeIdSet = new Set(keptNodes.map((n) => String(n.data.id)));
+      const aggregatedMemberById = new Map();
+      const membersByBucket = new Map();
+
+      aggregatedMembers.forEach((member) => {
+        const memberId = String(member.data.id);
+        const bucketId = resolveAggregateBucketId(member);
+
+        aggregatedMemberById.set(memberId, {
+          node: member,
+          bucketId,
+        });
+
+        if (!membersByBucket.has(bucketId)) {
+          membersByBucket.set(bucketId, []);
+        }
+
+        membersByBucket.get(bucketId).push(member);
+      });
+
+      const promotedSingletonNodes = [];
+      membersByBucket.forEach((bucketMembers, bucketId) => {
+        if (bucketMembers.length !== 1) return;
+
+        const singleton = bucketMembers[0];
+        const singletonId = String(singleton.data.id);
+
+        aggregatedMemberById.delete(singletonId);
+        keptNodeIdSet.add(singletonId);
+        promotedSingletonNodes.push(singleton);
+
+        membersByBucket.delete(bucketId);
+      });
+
+      const keptEdges = [];
+
+      filteredEdges.forEach((edge) => {
+        const src = String(edge.data.source);
+        const tgt = String(edge.data.target);
+        const edgeLabel = String(edge.data.label || "related");
+
+        const srcMemberMeta = aggregatedMemberById.get(src);
+        const tgtMemberMeta = aggregatedMemberById.get(tgt);
+        const srcIsMember = Boolean(srcMemberMeta);
+        const tgtIsMember = Boolean(tgtMemberMeta);
+
+        if (!srcIsMember && !tgtIsMember) {
+          if (keptNodeIdSet.has(src) && keptNodeIdSet.has(tgt)) {
+            if (lockedScope.has(src) || lockedScope.has(tgt)) {
+              keptEdges.push(edge);
+            }
+          }
+          return;
+        }
+
+        if (srcIsMember && tgtIsMember) {
+          return;
+        }
+      });
+
+      filteredNodes = keptNodes;
+      if (promotedSingletonNodes.length > 0) {
+        filteredNodes = mergeUniqueElements(filteredNodes, promotedSingletonNodes).filter((el) => !el?.data?.source);
+      }
+      filteredEdges = keptEdges;
+
+      if (aggregatedMembers.length > 0) {
+        const lockedScopeIdsList = Array.from(lockedScope);
+
+        membersByBucket.forEach((bucketMembers, bucketId) => {
+          const aggregateMembersInfo = bucketMembers.map((member) => {
+            const memberId = String(member.data.id);
+
+            const lockedNeighborIds = new Set();
+            const lockedEdgeBreakdown = {};
+            const lockedEdgesByNeighbor = {};
+
+            let lockedEdgeCount = 0;
+
+            const addEdgeStats = (neighborId, kind, qty) => {
+              const safeNeighborId = String(neighborId);
+              const safeKind = String(kind || "related");
+              const safeQty = Number(qty) || 0;
+              if (safeQty <= 0) return;
+
+              lockedEdgeBreakdown[safeKind] = (lockedEdgeBreakdown[safeKind] || 0) + safeQty;
+              lockedEdgeCount += safeQty;
+
+              if (!lockedEdgesByNeighbor[safeNeighborId]) {
+                lockedEdgesByNeighbor[safeNeighborId] = {};
+              }
+              lockedEdgesByNeighbor[safeNeighborId][safeKind] =
+                (lockedEdgesByNeighbor[safeNeighborId][safeKind] || 0) + safeQty;
+            };
+
+            edges.forEach((e) => {
+              const src = String(e.data.source);
+              const tgt = String(e.data.target);
+
+              const memberToLocked = src === memberId && lockedScope.has(tgt);
+              const lockedToMember = tgt === memberId && lockedScope.has(src);
+              if (!memberToLocked && !lockedToMember) return;
+
+              const lockedNeighborId = memberToLocked ? tgt : src;
+              lockedNeighborIds.add(lockedNeighborId);
+
+              if (isAggregatedEdge(e)) {
+                const weight = Number(e?.data?.weight) || 0;
+                const breakdown = e?.data?.breakdown && typeof e.data.breakdown === "object"
+                  ? e.data.breakdown
+                  : {};
+
+                if (Object.keys(breakdown).length > 0) {
+                  Object.entries(breakdown).forEach(([kind, value]) => {
+                    const qty = Number(value) || 0;
+                    addEdgeStats(lockedNeighborId, kind, qty);
+                  });
+                  return;
+                }
+
+                const fallbackLabel = String(e.data.label || "aggregated");
+                const fallbackQty = weight > 0 ? weight : 1;
+                addEdgeStats(lockedNeighborId, fallbackLabel, fallbackQty);
+                return;
+              }
+
+              const label = String(e.data.label || "related");
+              addEdgeStats(lockedNeighborId, label, 1);
+            });
+
+            const connectedToLocked = lockedEdgeCount > 0;
+
+            return {
+              id: memberId,
+              simpleName: member.data.simpleName || memberId,
+              type: member.data.label || "Unknown",
+              hasEdgeWithLocked: connectedToLocked,
+              lockedEdgeCount,
+              lockedNeighborIds: Array.from(lockedNeighborIds),
+              lockedEdgeBreakdown,
+              lockedEdgesByNeighbor,
+              depsShown: Boolean(shownAggregatedMemberDeps[`${bucketId}::${memberId}`]),
+            };
+          });
+
+          const knownPositions = bucketMembers
+            .map((node) => nodePositionsRef.current[String(node.data.id)] || node.position)
+            .filter(Boolean);
+
+          let aggregatePosition = null;
+          if (knownPositions.length > 0) {
+            const sum = knownPositions.reduce(
+              (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
+              { x: 0, y: 0 }
+            );
+
+            aggregatePosition = {
+              x: sum.x / knownPositions.length,
+              y: sum.y / knownPositions.length,
+            };
+          } else if (bucketId.startsWith("__agg_parent__")) {
+            const parentId = bucketId.replace("__agg_parent__", "");
+            const parentNode = nodes.find((n) => String(n.data.id) === parentId);
+            const parentPos =
+              nodePositionsRef.current[String(parentNode?.data?.id)] ||
+              parentNode?.position ||
+              { x: 0, y: 0 };
+
+            aggregatePosition = {
+              x: parentPos.x + 170,
+              y: parentPos.y + 70,
+            };
+          } else if (lockedScopeIdsList.length > 0) {
+            const lockAnchor = nodes.find((n) => String(n.data.id) === lockedScopeIdsList[0]);
+            const lockPos =
+              nodePositionsRef.current[String(lockAnchor?.data?.id)] ||
+              lockAnchor?.position ||
+              { x: 0, y: 0 };
+
+            aggregatePosition = {
+              x: lockPos.x + 260,
+              y: lockPos.y,
+            };
+          }
+
+          const isParentScopedBucket = bucketId.startsWith("__agg_parent__");
+          const aggregateDisplayName = isParentScopedBucket
+            ? `aggregated (${bucketMembers.length})`
+            : `aggregated-outside (${bucketMembers.length})`;
+
+          filteredNodes.push({
+            data: {
+              id: bucketId,
+              parent: isParentScopedBucket
+                ? bucketId.replace("__agg_parent__", "")
+                : null,
+              simpleName: aggregateDisplayName,
+              label: "Aggregated",
+              isAggregated: true,
+              isAggregateNode: true,
+              weight: bucketMembers.length,
+              aggregateMembers: aggregateMembersInfo,
+              aggregateParentId: isParentScopedBucket
+                ? bucketId.replace("__agg_parent__", "")
+                : null,
+            },
+            ...(aggregatePosition ? { position: aggregatePosition } : {}),
+            classes: "AggregatedNode",
+          });
+        });
+
+        // Do not draw synthetic aggregate edges in lock mode.
+        // Dependencies are shown in aggregate-member details and can be revealed on demand.
+
+        const aggregateNodeIds = new Set(
+          filteredNodes
+            .filter((n) => n?.data?.isAggregateNode)
+            .map((n) => String(n.data.id))
+        );
+
+        const revealedDepEdges = [];
+        Object.values(shownAggregatedMemberDeps).forEach((entry) => {
+          const aggregateNodeId = String(entry?.aggregateNodeId || "");
+          const memberId = String(entry?.memberId || "");
+          if (!aggregateNodeIds.has(aggregateNodeId)) return;
+
+          const memberMeta = aggregatedMemberById.get(memberId);
+          if (!memberMeta || memberMeta.bucketId !== aggregateNodeId) return;
+
+          const byNeighbor = entry?.lockedEdgesByNeighbor || {};
+          Object.entries(byNeighbor).forEach(([neighborIdRaw, breakdownRaw]) => {
+            const neighborId = String(neighborIdRaw);
+            if (!keptNodeIdSet.has(neighborId) || !lockedScope.has(neighborId)) return;
+
+            const breakdown =
+              breakdownRaw && typeof breakdownRaw === "object" ? breakdownRaw : {};
+            const weight = Object.values(breakdown).reduce((sum, value) => sum + (Number(value) || 0), 0);
+            if (weight <= 0) return;
+
+            revealedDepEdges.push({
+              data: {
+                id: `agg_member_dep_${aggregateNodeId}_${memberId}_${neighborId}`,
+                source: aggregateNodeId,
+                target: neighborId,
+                label: "aggregated",
+                isAggregated: true,
+                weight,
+                breakdown,
+                memberId,
+                isRevealedDependency: true,
+              },
+              classes: "aggregated",
+            });
+          });
+        });
+
+        if (revealedDepEdges.length > 0) {
+          filteredEdges = mergeUniqueElements(filteredEdges, revealedDepEdges).filter((el) => Boolean(el?.data?.source));
+        }
+      }
+    } else if (activeFeatureIds.size > 0) {
+      const visibleNodeById = new Map(filteredNodes.map((n) => [String(n.data.id), n]));
+      const featureScope = new Set();
+
+      filteredNodes.forEach((node) => {
+        const nodeId = String(node.data.id);
+        const featureIds = Array.isArray(node?.data?.participating_features)
+          ? node.data.participating_features
+          : [];
+
+        const inActiveFeature = featureIds.some((fid) => activeFeatureIds.has(fid));
+        if (!inActiveFeature) return;
+
+        featureScope.add(nodeId);
+
+        let parentId = node?.data?.parent != null ? String(node.data.parent) : null;
+        while (parentId) {
+          featureScope.add(parentId);
+          const parentNode = visibleNodeById.get(parentId);
+          parentId = parentNode?.data?.parent != null ? String(parentNode.data.parent) : null;
+        }
+      });
+
+      const keptNodes = [];
+      const aggregatedMembers = [];
+
+      filteredNodes.forEach((node) => {
+        const nodeId = String(node.data.id);
+        const keepAsRealNode =
+          featureScope.has(nodeId) ||
+          revealedAggregatedNodeIds.has(nodeId) ||
+          (expandedNodeIds.has(nodeId) && Boolean(node?.data?.hasChildren));
+
+        if (keepAsRealNode) keptNodes.push(node);
+        else aggregatedMembers.push(node);
+      });
+
+      const keptNodeIdSet = new Set(keptNodes.map((n) => String(n.data.id)));
+      const aggregatedMemberById = new Map();
+      const membersByBucket = new Map();
+
+      const resolveAggregateBucketId = (node) => {
+        let parentId = node?.data?.parent != null ? String(node.data.parent) : null;
+
+        while (parentId) {
+          if (expandedNodeIds.has(parentId) && keptNodeIdSet.has(parentId)) {
+            return `__agg_parent__${parentId}`;
+          }
+
+          const parentNode = visibleNodeById.get(parentId);
+          parentId = parentNode?.data?.parent != null ? String(parentNode.data.parent) : null;
+        }
+
+        return ROOT_AGGREGATE_BUCKET_ID;
+      };
+
+      aggregatedMembers.forEach((member) => {
+        const memberId = String(member.data.id);
+        const bucketId = resolveAggregateBucketId(member);
+
+        aggregatedMemberById.set(memberId, {
+          node: member,
+          bucketId,
+        });
+
+        if (!membersByBucket.has(bucketId)) membersByBucket.set(bucketId, []);
+        membersByBucket.get(bucketId).push(member);
+      });
+
+      const promotedSingletonNodes = [];
+      membersByBucket.forEach((bucketMembers, bucketId) => {
+        if (bucketMembers.length !== 1) return;
+        const singleton = bucketMembers[0];
+        const singletonId = String(singleton.data.id);
+        aggregatedMemberById.delete(singletonId);
+        keptNodeIdSet.add(singletonId);
+        promotedSingletonNodes.push(singleton);
+        membersByBucket.delete(bucketId);
+      });
+
+      const keptEdges = filteredEdges.filter((edge) => {
+        const src = String(edge.data.source);
+        const tgt = String(edge.data.target);
+        if (!keptNodeIdSet.has(src) || !keptNodeIdSet.has(tgt)) return false;
+        return featureScope.has(src) || featureScope.has(tgt);
+      });
+
+      filteredNodes = keptNodes;
+      if (promotedSingletonNodes.length > 0) {
+        filteredNodes = mergeUniqueElements(filteredNodes, promotedSingletonNodes).filter((el) => !el?.data?.source);
+      }
+      filteredEdges = keptEdges;
+
+      if (aggregatedMembers.length > 0) {
+        membersByBucket.forEach((bucketMembers, bucketId) => {
+          if (bucketMembers.length < 2) return;
+
+          const aggregateMembersInfo = bucketMembers.map((member) => {
+            const memberId = String(member.data.id);
+            const featureNeighborIds = new Set();
+            const featureEdgeBreakdown = {};
+            const featureEdgesByNeighbor = {};
+            let featureEdgeCount = 0;
+
+            const addEdgeStats = (neighborId, kind, qty) => {
+              const safeNeighborId = String(neighborId);
+              const safeKind = String(kind || "related");
+              const safeQty = Number(qty) || 0;
+              if (safeQty <= 0) return;
+
+              featureEdgeBreakdown[safeKind] = (featureEdgeBreakdown[safeKind] || 0) + safeQty;
+              featureEdgeCount += safeQty;
+
+              if (!featureEdgesByNeighbor[safeNeighborId]) {
+                featureEdgesByNeighbor[safeNeighborId] = {};
+              }
+              featureEdgesByNeighbor[safeNeighborId][safeKind] =
+                (featureEdgesByNeighbor[safeNeighborId][safeKind] || 0) + safeQty;
+            };
+
+            edges.forEach((e) => {
+              const src = String(e.data.source);
+              const tgt = String(e.data.target);
+
+              const memberToFeature = src === memberId && featureScope.has(tgt);
+              const featureToMember = tgt === memberId && featureScope.has(src);
+              if (!memberToFeature && !featureToMember) return;
+
+              const featureNeighborId = memberToFeature ? tgt : src;
+              featureNeighborIds.add(featureNeighborId);
+
+              if (isAggregatedEdge(e)) {
+                const weight = Number(e?.data?.weight) || 0;
+                const breakdown = e?.data?.breakdown && typeof e.data.breakdown === "object"
+                  ? e.data.breakdown
+                  : {};
+
+                if (Object.keys(breakdown).length > 0) {
+                  Object.entries(breakdown).forEach(([kind, value]) => {
+                    const qty = Number(value) || 0;
+                    addEdgeStats(featureNeighborId, kind, qty);
+                  });
+                  return;
+                }
+
+                const fallbackLabel = String(e.data.label || "aggregated");
+                const fallbackQty = weight > 0 ? weight : 1;
+                addEdgeStats(featureNeighborId, fallbackLabel, fallbackQty);
+                return;
+              }
+
+              const label = String(e.data.label || "related");
+              addEdgeStats(featureNeighborId, label, 1);
+            });
+
+            return {
+              id: memberId,
+              simpleName: member.data.simpleName || memberId,
+              type: member.data.label || "Unknown",
+              hasEdgeWithLocked: featureEdgeCount > 0,
+              lockedEdgeCount: featureEdgeCount,
+              lockedNeighborIds: Array.from(featureNeighborIds),
+              lockedEdgeBreakdown: featureEdgeBreakdown,
+              lockedEdgesByNeighbor: featureEdgesByNeighbor,
+              depsShown: Boolean(shownAggregatedMemberDeps[`${bucketId}::${memberId}`]),
+            };
+          });
+
+          const knownPositions = bucketMembers
+            .map((node) => nodePositionsRef.current[String(node.data.id)] || node.position)
+            .filter(Boolean);
+
+          let aggregatePosition = null;
+          if (knownPositions.length > 0) {
+            const sum = knownPositions.reduce(
+              (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
+              { x: 0, y: 0 }
+            );
+
+            aggregatePosition = {
+              x: sum.x / knownPositions.length,
+              y: sum.y / knownPositions.length,
+            };
+          }
+
+          const isParentScopedBucket = bucketId.startsWith("__agg_parent__");
+          filteredNodes.push({
+            data: {
+              id: bucketId,
+              parent: isParentScopedBucket ? bucketId.replace("__agg_parent__", "") : null,
+              simpleName: `aggregated (${bucketMembers.length})`,
+              label: "Aggregated",
+              isAggregated: true,
+              isAggregateNode: true,
+              weight: bucketMembers.length,
+              aggregateMembers: aggregateMembersInfo,
+              aggregateContextLabel: "feature scope",
+            },
+            ...(aggregatePosition ? { position: aggregatePosition } : {}),
+            classes: "AggregatedNode",
+          });
+        });
+
+        const aggregateNodeIds = new Set(
+          filteredNodes
+            .filter((n) => n?.data?.isAggregateNode)
+            .map((n) => String(n.data.id))
+        );
+
+        const revealedDepEdges = [];
+        Object.values(shownAggregatedMemberDeps).forEach((entry) => {
+          const aggregateNodeId = String(entry?.aggregateNodeId || "");
+          const memberId = String(entry?.memberId || "");
+          if (!aggregateNodeIds.has(aggregateNodeId)) return;
+
+          const memberMeta = aggregatedMemberById.get(memberId);
+          if (!memberMeta || memberMeta.bucketId !== aggregateNodeId) return;
+
+          const byNeighbor = entry?.lockedEdgesByNeighbor || {};
+          Object.entries(byNeighbor).forEach(([neighborIdRaw, breakdownRaw]) => {
+            const neighborId = String(neighborIdRaw);
+            if (!keptNodeIdSet.has(neighborId) || !featureScope.has(neighborId)) return;
+
+            const breakdown =
+              breakdownRaw && typeof breakdownRaw === "object" ? breakdownRaw : {};
+            const weight = Object.values(breakdown).reduce((sum, value) => sum + (Number(value) || 0), 0);
+            if (weight <= 0) return;
+
+            revealedDepEdges.push({
+              data: {
+                id: `agg_feature_dep_${aggregateNodeId}_${memberId}_${neighborId}`,
+                source: aggregateNodeId,
+                target: neighborId,
+                label: "aggregated",
+                isAggregated: true,
+                weight,
+                breakdown,
+                memberId,
+                isRevealedDependency: true,
+              },
+              classes: "aggregated",
+            });
+          });
+        });
+
+        if (revealedDepEdges.length > 0) {
+          filteredEdges = mergeUniqueElements(filteredEdges, revealedDepEdges).filter((el) => Boolean(el?.data?.source));
+        }
+      }
     }
 
     if (edgeFocusNodeIds.size > 0) {
@@ -493,7 +1082,7 @@ function GraphPage() {
     }
 
     return sanitizeEdgesByPresentNodes([...filteredNodes, ...filteredEdges]);
-  }, [graphElements, expandedNodeIds, lockedNodeIds, edgeFocusNodeIds]);
+  }, [graphElements, expandedNodeIds, lockedNodeIds, revealedAggregatedNodeIds, shownAggregatedMemberDeps, edgeFocusNodeIds, activeFeatureIds]);
 
   const lockedScopeIds = useMemo(() => {
     if (lockedNodeIds.size === 0) return new Set();
@@ -669,6 +1258,8 @@ function GraphPage() {
           isDecomposing={projectStatus === 'decomposing'}
           isProjectSummarizing={projectStatus === 'summarizing'}
           onSummarizeNode={handleSummarizeNode}
+          onRevealAggregatedMember={handleRevealAggregatedMember}
+          onRevealAggregatedMemberDependencies={handleRevealAggregatedMemberDependencies}
         />
       </div>
 

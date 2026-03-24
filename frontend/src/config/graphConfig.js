@@ -187,6 +187,39 @@ export const saboStylesheet = [
         }
     },
 
+    {
+        selector: '.AggregatedNode',
+        style: {
+            'shape': 'round-rectangle',
+            'width': 'label',
+            'height': 'label',
+            'min-width': 78,
+            'min-height': 34,
+            'background-color': 'rgba(71, 85, 105, 0.32)',
+            'border-width': 2,
+            'border-style': 'solid',
+            'border-color': '#64748b',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-justification': 'center',
+            'text-margin-y': 0,
+            'text-background-opacity': 0,
+            'text-wrap': 'none',
+            'text-max-width': 120,
+            'font-size': '11px',
+            'font-weight': 800,
+            'color': '#f1f5f9',
+            'text-outline-color': '#111827',
+            'text-outline-width': 1,
+            'padding': '10px',
+            'shadow-color': 'rgba(100, 116, 139, 0.24)',
+            'shadow-opacity': 0.22,
+            'shadow-blur': 8,
+            'shadow-offset-x': 0,
+            'shadow-offset-y': 0
+        }
+    },
+
     // ================================================================
     // 3. CONTAINER STATES (Overrides for Parents)
     // ================================================================

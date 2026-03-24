@@ -17,7 +17,7 @@ const CODE_KEYS = new Set([
 
 const STATUS_KEYS = new Set(['Message', 'message', 'status', 'error']);
 
-const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [], onSummarizeNode, isProjectSummarizing = false }) => {
+const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [], onSummarizeNode, onRevealAggregatedMember, onRevealAggregatedMemberDependencies, isProjectSummarizing = false }) => {
     const [isSummarizingNode, setIsSummarizingNode] = useState(false);
     
     if (!selectedElement) return null;
@@ -27,12 +27,18 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
         source, target, 
         breakdown, weight, isAggregated,
         participating_features,
+        aggregateMembers,
+        aggregateContextLabel,
         ai_summary
     } = selectedElement;
+
+    const dependencyScopeLabel = aggregateContextLabel === 'feature scope' ? 'feature scope' : 'locked scope';
 
     // --- CONTEXT ---
     const isTraceEdge = id === 'trace-ghost-edge';
     const isEdge = source && target;
+    const isAggregateNode = !isEdge && Boolean(selectedElement.isAggregateNode);
+    const isAggregatedEdge = isEdge && Boolean(isAggregated);
     const isNode = !isEdge && !isAggregated;
     const isLocked = lockedNodeIds && id ? lockedNodeIds.has(String(id)) : false;
     const isEdgeFocused = edgeFocusNodeIds && id ? edgeFocusNodeIds.has(String(id)) : false;
@@ -60,8 +66,12 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
         headerColor = 'rgba(214, 51, 132, 0.2)'; 
         badgeText = "TRACE EXECUTION";
         title = activeTraceAction ? activeTraceAction.simpleName : "Trace Step";
-    } else if (isAggregated) { 
-        headerColor = 'rgba(139, 92, 246, 0.2)';
+    } else if (isAggregateNode) {
+        headerColor = 'rgba(56, 189, 248, 0.16)';
+        badgeText = "AGGREGATED NODE";
+        title = `${simpleName || 'Aggregated Group'}`;
+    } else if (isAggregatedEdge) { 
+        headerColor = 'rgba(56, 189, 248, 0.16)';
         badgeText = "AGGREGATE GROUP";
         title = `Connections (${weight || 'Many'})`;
     } else if (isEdge) {
@@ -203,7 +213,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
                 )}
 
                 {/* AGGREGATION */}
-                {isAggregated && breakdown && (
+                {isAggregatedEdge && breakdown && (
                     <div style={styles.section}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
                             <h4 style={{...styles.sectionTitle, marginBottom: 0}}>Edge Composition</h4>
@@ -224,6 +234,61 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
                                 </div>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {isAggregateNode && (
+                    <div style={styles.section}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                            <h4 style={{...styles.sectionTitle, marginBottom: 0}}>Members</h4>
+                            <span style={styles.totalBadge}>Total: {(aggregateMembers || []).length}</span>
+                        </div>
+
+                        {(aggregateMembers || []).length === 0 ? (
+                            <div style={styles.emptyText}>No members available.</div>
+                        ) : (
+                            <div style={styles.memberList}>
+                                {(aggregateMembers || []).map((member) => (
+                                    <div key={member.id} style={styles.memberRow}>
+                                        <div style={styles.memberInfo}>
+                                            <strong style={styles.memberName} title={member.simpleName}>{member.simpleName}</strong>
+                                            <div style={styles.memberStatsRow}>
+                                                <span style={styles.memberTypeBadge}>{member.type}</span>
+                                                <span style={{...styles.memberDepsBadge, ...(member.hasEdgeWithLocked ? styles.memberDepsOn : styles.memberDepsOff)}}>
+                                                    {member.hasEdgeWithLocked ? `${member.lockedEdgeCount} edge(s) to ${dependencyScopeLabel}` : `No edge to ${dependencyScopeLabel}`}
+                                                </span>
+                                            </div>
+                                            {member.lockedEdgeBreakdown && Object.keys(member.lockedEdgeBreakdown).length > 0 && (
+                                                <span style={styles.memberBreakdown}>
+                                                    {Object.entries(member.lockedEdgeBreakdown)
+                                                        .map(([kind, count]) => `${formatKey(kind)}: ${count}`)
+                                                        .join(' | ')}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div style={styles.memberActions}>
+                                            <button
+                                                onClick={() => onRevealAggregatedMember && onRevealAggregatedMember(member.id)}
+                                                style={styles.revealBtn}
+                                                title="Reveal this node from aggregate"
+                                            >
+                                                Reveal node
+                                            </button>
+
+                                            <button
+                                                onClick={() => onRevealAggregatedMemberDependencies && onRevealAggregatedMemberDependencies(id, member.id, member.lockedEdgesByNeighbor || {})}
+                                                style={styles.depsBtn}
+                                                disabled={!member.hasEdgeWithLocked}
+                                                title={member.hasEdgeWithLocked ? (member.depsShown ? `Hide dependencies to ${dependencyScopeLabel}` : `Show dependencies to ${dependencyScopeLabel}`) : `No dependencies to ${dependencyScopeLabel}`}
+                                            >
+                                                {member.depsShown ? 'Hide edges' : 'Show edges'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -362,14 +427,118 @@ const styles = {
     breakdownList: {
         background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px 12px'
     },
+    memberList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px'
+    },
     totalBadge: {
         fontSize: '10px', backgroundColor: 'rgba(255,255,255,0.1)',
         padding: '2px 6px', borderRadius: '4px', color: '#fff', fontWeight: 600
+    },
+    emptyText: {
+        color: '#9097a1',
+        fontSize: '12px',
+        fontStyle: 'italic'
     },
     headerBtn: {
         color: '#fff', fontSize: '14px', cursor: 'pointer', padding: '4px 8px',
         borderRadius: '4px', transition: 'all 0.2s', marginRight: '5px',
         display: 'flex', alignItems: 'center', justifyContent: 'center'
+    },
+    revealBtn: {
+        background: 'rgba(148, 163, 184, 0.14)',
+        border: '1px solid rgba(148, 163, 184, 0.55)',
+        color: '#e5e7eb',
+        borderRadius: '8px',
+        padding: '5px 10px',
+        fontSize: '11px',
+        fontWeight: 700,
+        cursor: 'pointer',
+        minWidth: '92px',
+        textAlign: 'center'
+    },
+    depsBtn: {
+        background: 'rgba(71, 85, 105, 0.25)',
+        border: '1px solid rgba(100, 116, 139, 0.6)',
+        color: '#cbd5e1',
+        borderRadius: '8px',
+        padding: '5px 10px',
+        fontSize: '11px',
+        fontWeight: 700,
+        cursor: 'pointer',
+        minWidth: '92px',
+        textAlign: 'center'
+    },
+    memberRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: '10px',
+        padding: '10px',
+        borderRadius: '8px',
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+    },
+    memberInfo: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        minWidth: 0,
+        flex: 1
+    },
+    memberName: {
+        color: '#e8eef5',
+        fontSize: '12px',
+        fontWeight: 700,
+        lineHeight: 1.35,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+    },
+    memberStatsRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        flexWrap: 'wrap'
+    },
+    memberTypeBadge: {
+        fontSize: '10px',
+        color: '#e2e8f0',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        border: '1px solid rgba(148, 163, 184, 0.5)',
+        backgroundColor: 'rgba(71, 85, 105, 0.35)',
+        fontWeight: 700,
+        letterSpacing: '0.2px'
+    },
+    memberDepsBadge: {
+        fontSize: '10px',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        fontWeight: 700,
+        letterSpacing: '0.2px'
+    },
+    memberDepsOn: {
+        color: '#d1fae5',
+        border: '1px solid rgba(16, 185, 129, 0.6)',
+        backgroundColor: 'rgba(16, 185, 129, 0.15)'
+    },
+    memberDepsOff: {
+        color: '#cbd5e1',
+        border: '1px solid rgba(148, 163, 184, 0.45)',
+        backgroundColor: 'rgba(71, 85, 105, 0.2)'
+    },
+    memberActions: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        alignItems: 'flex-end'
+    },
+    memberBreakdown: {
+        color: '#9fb0c2',
+        fontSize: '10px',
+        lineHeight: 1.3
     }
 };
 
