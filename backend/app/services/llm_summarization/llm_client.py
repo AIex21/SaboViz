@@ -32,7 +32,7 @@ class LLMClient:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert system architecture analyzer. You must analyze the provided code/context and respond strictly by calling the provided tool with the correct JSON schema."
+                        "content": "You are an expert system architecture analyzer. You must analyze the provided code/context and respond strictly by calling the provided tool with the correct JSON schema. Do not guess, expand, or reinterpret abbreviations/acronyms from names, identifiers, or snippets. Keep abbreviations exactly as written unless the full form is explicitly provided in the given context."
                     },
                     {
                         "role": "user",
