@@ -209,8 +209,15 @@ def start_decomposition(
     background_tasks: BackgroundTasks,
     service: FunctionalDecompositionService = Depends(get_decomposition_service),
     graph_service: GraphService = Depends(get_service),
+    decomposition_method: str = Query(
+        "agglomerative",
+        pattern="^(agglomerative|graph_community)$",
+        description="Decomposition strategy: 'agglomerative' (legacy) or 'graph_community' (automatic community detection)."
+    ),
     distance_threshold: float = Query(0.4, ge=0.0, le=1.0, description="Max distance to group features"),
     infrastructure_threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min ubiquity to mark as infrastructure"),
+    overlap_alpha: float = Query(0.8, ge=0.0, le=1.0, description="Overlap strictness for graph_community mode"),
+    leiden_resolution: float = Query(1.8, ge=0.1, le=5.0, description="Leiden resolution for graph_community mode. Higher values produce more communities."),
     use_ai: bool = Query(True, description="Use AI for feature naming and descriptions")
 ):
     if not graph_service.get_project_by_id(project_id):
@@ -222,7 +229,10 @@ def start_decomposition(
             project_id,
             distance_threshold,
             infrastructure_threshold,
-            use_ai
+            use_ai,
+            decomposition_method,
+            overlap_alpha,
+            leiden_resolution
         )
         return {"message": "Decomposition started in the background"}
     except Exception as e:

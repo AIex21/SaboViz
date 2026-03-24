@@ -183,16 +183,32 @@ analyze_project_tool = [{
 feature_schema = {
     "type": "object",
     "properties": {
-        "feature_name": {
-            "type": "string",
-            "description": "A concise, human-readable name for this functional feature (e.g., 'User Authentication', 'Payment Processing', 'Data Export'). Avoid using raw code syntax like 'process_data'."
-        },
         "description": {
             "type": "string",
+            "minLength": 20,
             "description": "A 1-2 sentence description explaining the high-level business logic or functionality this group of operations performs."
+        },
+        "feature_action": {
+            "type": "string",
+            "minLength": 3,
+            "description": "Primary capability verb in gerund or noun-verb form (e.g., 'Adding', 'Retrieving', 'Generating', 'Validating'). Must be specific, never generic terms like 'Management'."
+        },
+        "feature_entity": {
+            "type": "string",
+            "minLength": 2,
+            "description": "Main business or technical entity acted on by the cluster (e.g., 'Password', 'Invoice', 'Session')."
+        },
+        "feature_context": {
+            "type": "string",
+            "description": "Optional scope/context qualifier when needed for disambiguation (e.g., 'for Admin Users', 'in Database'). Return an empty string if no context is needed."
+        },
+        "feature_name": {
+            "type": "string",
+            "minLength": 5,
+            "description": "Final composed feature name using this template: [feature_action] + [feature_entity] + optional [feature_context]. Must be concrete and cluster-specific (e.g., 'Adding Password to Vault', 'Password Retrieval')."
         }
     },
-    "required": ["feature_name", "description"],
+    "required": ["description", "feature_action", "feature_entity", "feature_context", "feature_name"],
     "additionalProperties": False
 }
 

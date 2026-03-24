@@ -224,9 +224,25 @@ const ProjectsPage = () => {
         }
     };
 
-    const handleConfirmDecomposition = async (projectId, distThreshold, infraThreshold, useAi) => {
+    const handleConfirmDecomposition = async (
+        projectId,
+        distThreshold,
+        infraThreshold,
+        useAi,
+        decompositionMethod,
+        overlapAlpha,
+        leidenResolution
+    ) => {
         try {
-            await projectApi.startDecomposition(projectId, distThreshold, infraThreshold, useAi);
+            await projectApi.startDecomposition(
+                projectId,
+                distThreshold,
+                infraThreshold,
+                useAi,
+                decompositionMethod,
+                overlapAlpha,
+                leidenResolution
+            );
             
             showToast("Functional decomposition started.", "info");
 

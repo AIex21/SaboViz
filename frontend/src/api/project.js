@@ -119,11 +119,22 @@ export const projectApi = {
         return response.data;
     },
 
-    startDecomposition: async (projectId, distanceThreshold = 0.4, infrastructureThreshold = 0.3, useAi = true) => {
+    startDecomposition: async (
+        projectId,
+        distanceThreshold = 0.4,
+        infrastructureThreshold = 0.3,
+        useAi = true,
+        decompositionMethod = 'agglomerative',
+        overlapAlpha = 0.8,
+        leidenResolution = 1.8
+    ) => {
         const response = await api.post(`/projects/${projectId}/decompose`, null, {
             params: {
+                decomposition_method: decompositionMethod,
                 distance_threshold: distanceThreshold,
                 infrastructure_threshold: infrastructureThreshold,
+                overlap_alpha: overlapAlpha,
+                leiden_resolution: leidenResolution,
                 use_ai: useAi
             }
         });
