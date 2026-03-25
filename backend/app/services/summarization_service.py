@@ -34,6 +34,16 @@ class SummarizationService:
 
         self.shallow_summaries: Dict[str, Dict[str, Any]] = {}
 
+    def _non_root_style_constraints(self) -> str:
+        return (
+            "Style constraints for this node summary:\n"
+            "- Focus only on this node's local responsibility and relationships.\n"
+            "- Do NOT restate the broader project/system domain (e.g., 'security system', 'semiconductor system').\n"
+            "- Avoid repeating parent/root-level context unless strictly necessary for disambiguation.\n"
+            "- Never use phrasing like 'in the <ProductName> application/system/platform'.\n"
+            "- Start directly with the node behavior (verb + object), not with product context.\n"
+        )
+
     def _prepare_context(self, project_id: int):
         self.nodes_map = {}
         self.outbound_edges = {}
@@ -187,6 +197,7 @@ class SummarizationService:
         source_code = self.snippets.get(node_id, "Source code not available.")
 
         prompt = f"Analyze the following Operation (Method/Function) named '{name}'.\n\n"
+        prompt += self._non_root_style_constraints() + "\n"
         prompt += f"### Source Code:\n```cpp\n{source_code}\n```\n\n"
 
         if EDGE_INVOKES in child_summaries:
@@ -208,6 +219,7 @@ class SummarizationService:
     
     def prompt_type(self, name: str, child_summaries: dict) -> dict:
         prompt = f"Analyze the following Type (Class/Struct) named '{name}'.\n\n"
+        prompt += self._non_root_style_constraints() + "\n"
 
         if EDGE_ENCAPSULATES in child_summaries:
             prompt += "\n### It encapsulates the following operations (methods):\n"
@@ -226,6 +238,7 @@ class SummarizationService:
     
     def prompt_scope(self, name: str, child_summaries: dict) -> dict:
         prompt = f"Analyze the following Scope (Namespaces/Packages) named '{name}'.\n\n"
+        prompt += self._non_root_style_constraints() + "\n"
         
         if EDGE_ENCLOSES in child_summaries:
             prompt += "\n### It encloes the following Scope, Type or Operation:\n"
@@ -239,6 +252,8 @@ class SummarizationService:
     
     def prompt_file(self, name: str, child_summaries: dict) -> dict:
         prompt = f"Analyze the following File named '{name}'. \n\n"
+        prompt += self._non_root_style_constraints()
+        prompt += "- Do not produce a section that just repeats child names. Summarize concrete file-level responsibilities instead.\n\n"
 
         if EDGE_DECLARES in child_summaries:
             prompt += "\n### It declares the following functional elements:\n"
@@ -257,9 +272,10 @@ class SummarizationService:
     
     def prompt_folder(self, name: str, child_summaries: dict) -> dict:
         prompt = f"Analyze the following Folder named '{name}'. \n\n"
+        prompt += self._non_root_style_constraints() + "\n"
 
         if EDGE_CONTAINS in child_summaries:
-            prompt += "\n### It contanins the following File/Folder:\n"
+            prompt += "\n### It contains the following File/Folder:\n"
             for item in child_summaries[EDGE_CONTAINS]:
                 prompt += f"- {item}\n"
 
@@ -270,6 +286,7 @@ class SummarizationService:
 
     def prompt_project(self, name: str, child_summaries: dict) -> dict:
         prompt = f"Analyze the following Project named '{name}'. \n\n"
+        prompt += "This is the root/system-level node: include overall domain and architectural context.\n\n"
 
         if EDGE_INCLUDES in child_summaries:
             prompt += "\n### It includes the following Folder:\n"
@@ -283,20 +300,26 @@ class SummarizationService:
     
     def prompt_feature(self, nodes: list[Node], edges: list[Edge], is_infrastructure=False) -> dict:
         prompt = "Analyze the following cluster of tightly coupled software operations that make up a distinct software feature.\n\n"
-        prompt += "CRITICAL INSTRUCTION: Name the feature based strictly on the exact operations present. Do not imply the existence of a broader system. If the cluster only lists or reads data, the name must reflect 'Listing' or 'Retrieval', not general 'Management'.\n\n"
+        prompt += "CRITICAL INSTRUCTION: Name the feature based strictly on the exact operations present. Do not imply the existence of a broader system. If the cluster only lists or reads data, prefer names like 'Listing' or 'Retrieval' over broad labels.\n\n"
+        prompt += "Naming constraints:\n"
+        prompt += "- Use specific, operation-grounded actions.\n"
+        prompt += "- Natural action phrases are allowed when concrete (e.g., 'Setting Up', 'Initializing', 'Resetting').\n"
+        prompt += "- Do NOT include project/system labels in feature_name or description (e.g., avoid 'in Security System', 'for Semiconductor Platform').\n"
+        prompt += "- feature_context should be empty unless needed for disambiguation.\n\n"
         prompt += "The description MUST explicitly state what this cluster includes (key operation groups or responsibilities), not only what it does.\n\n"
         
         if is_infrastructure:
             prompt += "NOTE: This cluster is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple parts of the codebase.\n"
             prompt += "Name format for infrastructure: [Scope/Qualifier] + [Shared Capability].\n"
             prompt += "Examples: 'Common Utilities', 'Shared Infrastructure Utilities', 'Cross-Cutting Runtime Utilities', 'Core Validation Utilities'.\n"
-            prompt += "The description should start with 'Includes:' and then list the concrete utilities/capabilities represented by the operations.\n"
+            prompt += "The description should start with 'Includes:' and then list the concrete utilities/capabilities represented by the operations, without system-level context.\n"
         else:
             prompt += "NOTE: This cluster is a domain-specific Business Feature.\n"
             prompt += "Determine its exact business capability or user-facing workflow.\n"
             prompt += "Name format for business features: [Specific Action/Verb] + [Entity] + [Context].\n"
             prompt += "Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.\n"
             prompt += "Avoid generic infrastructure-style names like 'Common Utilities' for business clusters.\n"
+            prompt += "Avoid broad names like 'Password Management'; prefer specific names like 'Setting Up Master Password', 'Adding Password', or 'Password Retrieval'.\n"
             
         prompt += "### Operations in this Cluster:\n"
 

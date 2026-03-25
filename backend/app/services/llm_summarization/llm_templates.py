@@ -94,15 +94,19 @@ file_schema = {
     "properties": {
         "description": {
             "type": "string",
-            "description": "Describe the purpose of this file. Does it contain utility functions, a specific module implementation, or definitions?"
+            "description": "Describe the purpose of this file in 1-2 sentences, focused on what this file contributes locally. Do not restate the overall project/system domain."
         },
-        "main_components": {
+        "file_role": {
+            "type": "string",
+            "description": "A short role label for this file (e.g., 'API Router', 'Data Model Definitions', 'Utility Helpers')."
+        },
+        "responsibilities": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List the most critical classes or functions defined in this file."
+            "description": "List 2 to 4 concrete responsibilities implemented by this file. Do not merely list child element names."
         }
     },
-    "required": ["description", "main_components"],
+    "required": ["description", "file_role", "responsibilities"],
     "additionalProperties": False
 }
 
@@ -123,12 +127,12 @@ folder_schema = {
     "properties": {
         "description": {
             "type": "string",
-            "description": "Describe the architectural role of this folder. Is it a feature subsystem, a utility library, or a configuration directory?"
+            "description": "Describe this folder in 1-2 sentences using concrete capabilities implemented by its contents. Avoid generic labels-only descriptions (e.g., do not return only 'Utility library')."
         },
         "key_contents": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List 2 to 5 important capabilities or functionalities contained in this folder."
+            "description": "List 2 to 5 concrete capabilities provided by this folder (e.g., 'path resolution utilities', 'trace parsing', 'schema validation')."
         }
     },
     "required": ["description", "key_contents"],
@@ -186,12 +190,12 @@ feature_schema = {
         "description": {
             "type": "string",
             "minLength": 20,
-            "description": "A 1-2 sentence description explaining the high-level business logic or functionality this group of operations performs."
+            "description": "A 1-2 sentence description explaining the exact functionality this group performs. Do not mention the overall system/project domain unless it is required for disambiguation."
         },
         "feature_action": {
             "type": "string",
             "minLength": 3,
-            "description": "Primary capability verb in gerund or noun-verb form (e.g., 'Adding', 'Retrieving', 'Generating', 'Validating'). Must be specific, never generic terms like 'Management'."
+            "description": "Primary capability action phrase (e.g., 'Adding', 'Retrieving', 'Generating', 'Validating', 'Setting Up'). Prefer specific actions over vague labels."
         },
         "feature_entity": {
             "type": "string",
@@ -200,12 +204,12 @@ feature_schema = {
         },
         "feature_context": {
             "type": "string",
-            "description": "Optional scope/context qualifier when needed for disambiguation (e.g., 'for Admin Users', 'in Database'). Return an empty string if no context is needed."
+            "description": "Optional scope/context qualifier only when needed for disambiguation (e.g., 'for Admin Users', 'in Database'). Never include broad system labels (e.g., 'in Security System' or 'in Semiconductor Manufacturing'). Return an empty string if no context is needed."
         },
         "feature_name": {
             "type": "string",
             "minLength": 5,
-            "description": "Final composed feature name using this template: [feature_action] + [feature_entity] + optional [feature_context]. Must be concrete and cluster-specific (e.g., 'Adding Password to Vault', 'Password Retrieval')."
+            "description": "Final composed feature name using this template: [feature_action] + [feature_entity] + optional [feature_context]. Must be concrete and cluster-specific, and avoid broad system/domain mentions (e.g., use 'Setting Up Master Password' instead of adding 'in Security System')."
         }
     },
     "required": ["description", "feature_action", "feature_entity", "feature_context", "feature_name"],
