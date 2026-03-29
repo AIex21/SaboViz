@@ -299,44 +299,54 @@ class SummarizationService:
         return self.llm.generate_json(prompt, analyze_project_tool)
     
     def prompt_feature(self, nodes: list[Node], edges: list[Edge], is_infrastructure=False) -> dict:
-        prompt = "Analyze the following cluster of tightly coupled software operations that make up a distinct software feature.\n\n"
-        prompt += "CRITICAL INSTRUCTION: Name the feature based strictly on the exact operations present. Do not imply the existence of a broader system. If the cluster only lists or reads data, prefer names like 'Listing' or 'Retrieval' over broad labels.\n\n"
-        prompt += "Naming constraints:\n"
-        prompt += "- Use specific, operation-grounded actions.\n"
-        prompt += "- Natural action phrases are allowed when concrete (e.g., 'Setting Up', 'Initializing', 'Resetting').\n"
-        prompt += "- Do NOT include project/system labels in feature_name or description (e.g., avoid 'in Security System', 'for Semiconductor Platform').\n"
-        prompt += "- feature_context should be empty unless needed for disambiguation.\n\n"
-        prompt += "The description MUST explicitly state what this cluster includes (key operation groups or responsibilities), not only what it does.\n\n"
-        
-        if is_infrastructure:
-            prompt += "NOTE: This cluster is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple parts of the codebase.\n"
-            prompt += "Name format for infrastructure: [Scope/Qualifier] + [Shared Capability].\n"
-            prompt += "Examples: 'Common Utilities', 'Shared Infrastructure Utilities', 'Cross-Cutting Runtime Utilities', 'Core Validation Utilities'.\n"
-            prompt += "The description should start with 'Includes:' and then list the concrete utilities/capabilities represented by the operations, without system-level context.\n"
-        else:
-            prompt += "NOTE: This cluster is a domain-specific Business Feature.\n"
-            prompt += "Determine its exact business capability or user-facing workflow.\n"
-            prompt += "Name format for business features: [Specific Action/Verb] + [Entity] + [Context].\n"
-            prompt += "Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.\n"
-            prompt += "Avoid generic infrastructure-style names like 'Common Utilities' for business clusters.\n"
-            prompt += "Avoid broad names like 'Password Management'; prefer specific names like 'Setting Up Master Password', 'Adding Password', or 'Password Retrieval'.\n"
-            
-        prompt += "### Operations in this Cluster:\n"
+        prompt_lines = [
+            "Analyze the following cluster of tightly coupled software operations that make up a distinct software feature.",
+            "",
+            "### Operations in this Cluster:"
+        ]
 
         node_lookup = {}
         for node in nodes:
             name = node.properties.get("simpleName", node.id)
             node_lookup[node.id] = name
             summary = node.ai_summary.get("description", "") if node.ai_summary else "No summary available."
-            prompt += f"- {name}: {summary}\n"
+            prompt_lines.append(f"- {name}: {summary}")
 
         if edges:
-            prompt += "\n### Execution Flow:\n"
+            prompt_lines.append("")
+            prompt_lines.append("### Execution Flow:")
             for edge in edges:
                 source_name = node_lookup.get(edge.source_id)
                 target_name = node_lookup.get(edge.target_id)
 
                 if source_name and target_name:
-                    prompt += f"- {source_name} --[{edge.label}]--> {target_name}\n"
+                    prompt_lines.append(f"- {source_name} --[{edge.label}]--> {target_name}")
+
+        prompt_lines.append("")
+        prompt_lines.append("FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):")
+        prompt_lines.append("- Name the feature strictly from the exact operations present; do not imply a broader system.")
+        prompt_lines.append("- If the cluster mainly lists or reads data, prefer specific names like 'Listing' or 'Retrieval' over broad labels.")
+        prompt_lines.append("- Use specific, operation-grounded actions. Natural action phrases are allowed when concrete (e.g., 'Setting Up', 'Initializing', 'Resetting').")
+        prompt_lines.append("- Do NOT include project/system labels in feature_name or description (e.g., avoid 'in Security System', 'for Semiconductor Platform').")
+        prompt_lines.append("- feature_context should be empty unless needed for disambiguation.")
+        prompt_lines.append("- The description MUST explicitly state what this cluster includes (key operation groups or responsibilities), not only what it does.")
+        prompt_lines.append("- Keep the same terminology used in the provided operation names/summaries whenever possible.")
+        prompt_lines.append("- Do not invent new entities, workflows, or scope not present in the cluster context.")
+        prompt_lines.append("- If uncertain, reuse exact operation wording instead of abstracting.")
+
+        if is_infrastructure:
+            prompt_lines.append("- This is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple parts of the codebase.")
+            prompt_lines.append("- Name format for infrastructure: [Scope/Qualifier] + [Shared Capability].")
+            prompt_lines.append("- Examples: 'Common Utilities', 'Shared Infrastructure Utilities', 'Cross-Cutting Runtime Utilities', 'Core Validation Utilities'.")
+            prompt_lines.append("- The description should start with 'Includes:' and then list concrete utilities/capabilities represented by the operations, without system-level context.")
+        else:
+            prompt_lines.append("- This is a domain-specific Business Feature.")
+            prompt_lines.append("- Determine its exact business capability or user-facing workflow.")
+            prompt_lines.append("- Name format for business features: [Specific Action/Verb] + [Entity] + [Context].")
+            prompt_lines.append("- Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.")
+            prompt_lines.append("- Avoid generic infrastructure-style names like 'Common Utilities' for business clusters.")
+            prompt_lines.append("- Avoid broad names like 'Password Management'; prefer specific names like 'Setting Up Master Password', 'Adding Password', or 'Password Retrieval'.")
+
+        prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_feature_tool)

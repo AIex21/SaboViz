@@ -192,27 +192,13 @@ feature_schema = {
             "minLength": 20,
             "description": "A 1-2 sentence description explaining the exact functionality this group performs. Do not mention the overall system/project domain unless it is required for disambiguation."
         },
-        "feature_action": {
-            "type": "string",
-            "minLength": 3,
-            "description": "Primary capability action phrase (e.g., 'Adding', 'Retrieving', 'Generating', 'Validating', 'Setting Up'). Prefer specific actions over vague labels."
-        },
-        "feature_entity": {
-            "type": "string",
-            "minLength": 2,
-            "description": "Main business or technical entity acted on by the cluster (e.g., 'Password', 'Invoice', 'Session')."
-        },
-        "feature_context": {
-            "type": "string",
-            "description": "Optional scope/context qualifier only when needed for disambiguation (e.g., 'for Admin Users', 'in Database'). Never include broad system labels (e.g., 'in Security System' or 'in Semiconductor Manufacturing'). Return an empty string if no context is needed."
-        },
         "feature_name": {
             "type": "string",
             "minLength": 5,
             "description": "Final composed feature name using this template: [feature_action] + [feature_entity] + optional [feature_context]. Must be concrete and cluster-specific, and avoid broad system/domain mentions (e.g., use 'Setting Up Master Password' instead of adding 'in Security System')."
         }
     },
-    "required": ["description", "feature_action", "feature_entity", "feature_context", "feature_name"],
+    "required": ["description", "feature_name"],
     "additionalProperties": False
 }
 
