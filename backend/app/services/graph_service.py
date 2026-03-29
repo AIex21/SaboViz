@@ -63,6 +63,9 @@ class GraphService:
     def get_all_edges(self, project_id: int) -> List[Edge]:
         return self.repo.get_all_edges(project_id)
     
+    def get_nodes_by_ids(self, node_ids: list[str]):
+        return self.repo.get_nodes_by_ids(node_ids)
+    
     def get_edges_between_nodes(self,  node_ids: list[str]):
         return self.repo.get_edges_between_nodes(node_ids)
     

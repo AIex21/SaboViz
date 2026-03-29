@@ -185,23 +185,58 @@ const SaboGraph = ({
         });
     }, [elements]);
 
+    const aggregateMemberToNodeId = useMemo(() => {
+        const mapping = new Map();
+
+        elements.forEach((ele) => {
+            if (ele?.data?.source) return;
+            if (!ele?.data?.isAggregateNode) return;
+
+            const aggregateNodeId = String(ele.data.id);
+            const members = Array.isArray(ele?.data?.aggregateMembers)
+                ? ele.data.aggregateMembers
+                : [];
+
+            members.forEach((member) => {
+                const memberId = member?.id;
+                if (memberId == null) return;
+                mapping.set(String(memberId), aggregateNodeId);
+            });
+        });
+
+        return mapping;
+    }, [elements]);
+
     // --- HELPER: Find the Visible Ancestor ---
     const getVisibleNodeId = (targetId) => {
         if (!targetId || !cyInstance) return null;
+        const targetIdStr = String(targetId);
 
         // 1. Is the node itself visible?
-        if (cyInstance.getElementById(targetId).length > 0) {
-            return targetId;
+        if (cyInstance.getElementById(targetIdStr).length > 0) {
+            return targetIdStr;
         }
 
-        // 2. If not, check ancestors using the hierarchyMap
-        const entry = hierarchyMap?.[targetId];
+        // 2. If this node is currently represented by an aggregate node, prefer that.
+        const aggregateNodeId = aggregateMemberToNodeId.get(targetIdStr);
+        if (aggregateNodeId && cyInstance.getElementById(aggregateNodeId).length > 0) {
+            return aggregateNodeId;
+        }
+
+        // 3. If not, check ancestors using the hierarchyMap.
+        const entry = hierarchyMap?.[targetIdStr];
         const ancestors = entry?.ancestors;
         
         if (ancestors && Array.isArray(ancestors)) {
             // Iterate from closest ancestor up to root
             for (let i = 0; i < ancestors.length; i++) {
-                const ancestorId = ancestors[i];
+                const ancestorId = String(ancestors[i]);
+
+                const ancestorAggregateNodeId = aggregateMemberToNodeId.get(ancestorId);
+                if (ancestorAggregateNodeId && cyInstance.getElementById(ancestorAggregateNodeId).length > 0) {
+                    return ancestorAggregateNodeId;
+                }
+
                 if (cyInstance.getElementById(ancestorId).length > 0) {
                     return ancestorId;
                 }

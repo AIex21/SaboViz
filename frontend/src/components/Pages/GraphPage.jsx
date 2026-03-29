@@ -94,8 +94,12 @@ function GraphPage() {
   const [traceDataMap, setTraceDataMap] = useState({});
   const [selectedTraceId, setSelectedTraceId] = useState("");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [showVisibleTraceOnly, setShowVisibleTraceOnly] = useState(false);
+  const [visibleTraceSteps, setVisibleTraceSteps] = useState([]);
+  const [isVisibleTraceFilterLoading, setIsVisibleTraceFilterLoading] = useState(false);
   const [hierarchyMap, setHierarchyMap] = useState({});
   const isFetchingHierarchy = useRef(false);
+  const visibleTraceFilterRequestRef = useRef(0);
   const nodePositionsRef = useRef({});
 
   const handleBackToDashboard = () => {
@@ -143,6 +147,9 @@ function GraphPage() {
         setActiveFeatureIds(new Set());
         setSelectedTraceId("");
         setCurrentStepIndex(0);
+        setShowVisibleTraceOnly(false);
+        setVisibleTraceSteps([]);
+        setIsVisibleTraceFilterLoading(false);
         setTraceDataMap({});
         nodePositionsRef.current = {};
       } catch (error) {
@@ -189,6 +196,7 @@ function GraphPage() {
     if (!traceId) {
       setSelectedTraceId("");
       setCurrentStepIndex(0);
+      setVisibleTraceSteps([]);
       return;
     }
 
@@ -206,7 +214,7 @@ function GraphPage() {
     }
   };
 
-  const traceSteps = useMemo(() => {
+  const rawTraceSteps = useMemo(() => {
     if (!selectedTraceId || !traceDataMap[selectedTraceId]) return [];
 
     const rawData = traceDataMap[selectedTraceId];
@@ -216,6 +224,19 @@ function GraphPage() {
     
     return actionNodes.sort((a, b) => a.data.properties.step - b.data.properties.step);
   }, [selectedTraceId, traceDataMap]);
+
+  const traceSteps = useMemo(() => {
+    return showVisibleTraceOnly ? visibleTraceSteps : rawTraceSteps;
+  }, [showVisibleTraceOnly, visibleTraceSteps, rawTraceSteps]);
+
+  useEffect(() => {
+    if (!traceSteps.length) {
+      setCurrentStepIndex(0);
+      return;
+    }
+
+    setCurrentStepIndex((prev) => Math.min(prev, traceSteps.length - 1));
+  }, [traceSteps.length]);
 
   const failureIndices = useMemo(() => {
     return traceSteps
@@ -1149,6 +1170,72 @@ function GraphPage() {
     return scope;
   }, [graphElements, lockedNodeIds]);
 
+  const visibleTraceNodeIds = useMemo(() => {
+    const ids = new Set();
+    const lockModeActive = lockedNodeIds.size > 0;
+
+    visibleElements.forEach((el) => {
+      if (el?.data?.source) return;
+      if (el?.data?.isAggregateNode) return;
+
+      const nodeId = el?.data?.id;
+      if (nodeId == null) return;
+
+      const nodeIdStr = String(nodeId);
+      if (lockModeActive && !lockedScopeIds.has(nodeIdStr)) return;
+
+      ids.add(nodeIdStr);
+    });
+
+    return Array.from(ids).sort();
+  }, [visibleElements, lockedNodeIds, lockedScopeIds]);
+
+  useEffect(() => {
+    if (!showVisibleTraceOnly || !selectedTraceId) {
+      setVisibleTraceSteps([]);
+      setIsVisibleTraceFilterLoading(false);
+      return;
+    }
+
+    if (visibleTraceNodeIds.length === 0) {
+      setVisibleTraceSteps([]);
+      setIsVisibleTraceFilterLoading(false);
+      return;
+    }
+
+    const requestId = visibleTraceFilterRequestRef.current + 1;
+    visibleTraceFilterRequestRef.current = requestId;
+    let isCancelled = false;
+
+    const loadVisibleTraceSteps = async () => {
+      setIsVisibleTraceFilterLoading(true);
+      try {
+        const payload = await projectApi.getVisibleTraceSteps(
+          selectedTraceId,
+          visibleTraceNodeIds,
+          Array.from(activeFeatureIds),
+        );
+        if (isCancelled || requestId !== visibleTraceFilterRequestRef.current) return;
+        setVisibleTraceSteps(payload?.steps || []);
+      } catch (error) {
+        if (isCancelled || requestId !== visibleTraceFilterRequestRef.current) return;
+        console.error("Failed to filter trace by visible nodes:", error);
+        setVisibleTraceSteps([]);
+        showToast("Failed to apply visible-node trace filter", "error");
+      } finally {
+        if (!isCancelled && requestId === visibleTraceFilterRequestRef.current) {
+          setIsVisibleTraceFilterLoading(false);
+        }
+      }
+    };
+
+    loadVisibleTraceSteps();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showVisibleTraceOnly, selectedTraceId, visibleTraceNodeIds, activeFeatureIds, showToast]);
+
   const edgeFocusNeighborIds = useMemo(() => {
     if (edgeFocusNodeIds.size === 0) return new Set();
 
@@ -1321,6 +1408,9 @@ function GraphPage() {
         totalSteps={traceSteps.length}
         onStepChange={setCurrentStepIndex}
         failureIndices={failureIndices}
+        showVisibleOnly={showVisibleTraceOnly}
+        onToggleVisibleOnly={() => setShowVisibleTraceOnly((prev) => !prev)}
+        isVisibleFilterLoading={isVisibleTraceFilterLoading}
       />
     </div>
   );

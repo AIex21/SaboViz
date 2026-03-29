@@ -58,3 +58,12 @@ class TraceSummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VisibleTraceFilterRequest(BaseModel):
+    visible_node_ids: List[str]
+    active_feature_ids: Optional[List[int]] = None
+
+
+class VisibleTraceStepsResponse(BaseModel):
+    steps: List[Dict[str, Any]]

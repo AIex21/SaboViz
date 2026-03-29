@@ -93,6 +93,14 @@ export const projectApi = {
         return response.data;
     },
 
+    getVisibleTraceSteps: async (traceId, visibleNodeIds, activeFeatureIds = []) => {
+        const response = await api.post(`/traces/${traceId}/steps/visible`, {
+            visible_node_ids: visibleNodeIds,
+            active_feature_ids: activeFeatureIds,
+        });
+        return response.data;
+    },
+
     uploadTrace: async (projectId, files) => {
         const formData = new FormData();
 

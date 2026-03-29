@@ -10,6 +10,9 @@ const TracePlayer = ({
   totalSteps,
   onStepChange,
   failureIndices = [],
+  showVisibleOnly = false,
+  onToggleVisibleOnly,
+  isVisibleFilterLoading = false,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -74,6 +77,18 @@ const TracePlayer = ({
 
           {currentTrace && (
             <>
+              <div style={styles.traceFilterRow}>
+                <button
+                  type="button"
+                  style={styles.visibleOnlyBtn(showVisibleOnly)}
+                  onClick={onToggleVisibleOnly}
+                  disabled={!onToggleVisibleOnly || isVisibleFilterLoading}
+                >
+                  {showVisibleOnly ? "Visible Components: ON" : "Visible Components: OFF"}
+                </button>
+                {isVisibleFilterLoading && <span style={styles.traceFilterMeta}>Filtering...</span>}
+              </div>
+
               {/* Controls */}
               <div style={styles.controlsRow}>
                 <div style={styles.buttonGroup}>
@@ -253,6 +268,28 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: "20px",
+  },
+  traceFilterRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    marginBottom: "12px",
+  },
+  visibleOnlyBtn: (active) => ({
+    borderRadius: "8px",
+    border: `1px solid ${active ? THEME.primary : THEME.border}`,
+    background: active ? `${THEME.primary}22` : "rgba(255,255,255,0.03)",
+    color: active ? THEME.primary : THEME.textMain,
+    padding: "6px 10px",
+    fontSize: "11px",
+    fontWeight: 700,
+    cursor: "pointer",
+  }),
+  traceFilterMeta: {
+    fontSize: "11px",
+    color: THEME.textMuted,
+    fontFamily: "monospace",
   },
   buttonGroup: { display: "flex", gap: "5px" },
   iconBtn: {

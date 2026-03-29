@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.exceptions import TraceValidationError
 from app.services.trace_service import TraceService
 from app.services.graph_service import GraphService
-from app.schemas.graph_schemas import TraceSummary
+from app.schemas.graph_schemas import TraceSummary, VisibleTraceFilterRequest, VisibleTraceStepsResponse
 
 router = APIRouter(prefix="/api", tags=["Traces"])
 
@@ -81,3 +81,22 @@ def delete_trace(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete trace: {str(e)}")
+
+
+@router.post("/traces/{trace_id}/steps/visible", response_model=VisibleTraceStepsResponse)
+def get_visible_trace_steps(
+    trace_id: int,
+    payload: VisibleTraceFilterRequest,
+    service: TraceService = Depends(get_trace_service)
+):
+    try:
+        steps = service.get_visible_trace_steps(
+            trace_id,
+            payload.visible_node_ids,
+            payload.active_feature_ids,
+        )
+        return {"steps": steps}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to filter trace steps: {str(e)}")

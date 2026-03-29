@@ -8,11 +8,15 @@ from fastapi import UploadFile
 
 from app.core.storage_paths import HOST_DATA_PATH
 from app.core.exceptions import TraceValidationError
+from app.models.graph import Node
+from app.models.feature import Feature
 
 # Import your custom modules
 from app.services.sabo_gen.trace_gen import TraceParser, SequenceBuilder
 from app.services.sabo_gen.dynamic_builder import DynamicGraphBuilder
 from app.repositories.trace_repo import TraceRepository
+from app.repositories.feature_repo import FeatureRepository
+from app.services.graph_service import GraphService
 
 READ_CHUNK_SIZE = 1024 * 1024
 
@@ -20,6 +24,8 @@ class TraceService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = TraceRepository(db)
+        self.repo_feature = FeatureRepository(db)
+        self.graph_service = GraphService(db)
 
     def get_project_traces(self, project_id: int):
         return self.repo.get_traces_by_project_id(project_id)
@@ -156,3 +162,72 @@ class TraceService:
                 raise RuntimeError(f"Failed to delete trace file: {str(e)}")
         
         self.repo.delete_trace(trace_id)
+    
+    def get_visible_trace_steps(self, trace_id: int, visible_node_ids, active_feature_ids=None):
+        trace = self.repo.get_trace_by_id(trace_id)
+        if not trace:
+            raise FileNotFoundError("Trace not found in database.")
+        trace_file = self.get_trace_file(trace_id)
+        elements = trace_file.get("elements", {}) if isinstance(trace_file, dict) else {}
+        nodes_of_trace = elements.get("nodes", []) if isinstance(elements, dict) else []
+        graph_nodes = self._get_nodes_of_trace(nodes_of_trace)
+        
+        features_nodes_ids = {}
+        if active_feature_ids:
+            features_nodes = self.repo_feature.get_nodes_of_features(active_feature_ids)
+            features_nodes_ids = {str(node.id) for node in features_nodes}
+
+        visible_ids = {str(node_id) for node_id in (visible_node_ids or []) if node_id is not None}
+        if not visible_ids:
+            return []
+        
+        filtered_steps = []
+
+        for node in nodes_of_trace:
+            labels = node.get("data", {}).get("labels", [])
+            if "Action" not in labels:
+                continue
+            state = node.get("data", {}).get("properties", {}).get("operationResolution")
+            if state != "resolved":
+                continue
+
+            props = node.get("data", {}).get("properties", {})
+            source_id = props.get("sourceId")
+            target_id = props.get("targetId")
+
+            if active_feature_ids:
+                if source_id not in features_nodes_ids and target_id not in features_nodes_ids:
+                    continue
+
+            source_ancestors = []
+            target_ancestors = []
+            for graph_node in graph_nodes:
+                if str(graph_node.id) == str(source_id):
+                    source_ancestors = graph_node.ancestors or []
+                if str(graph_node.id) == str(target_id):
+                    target_ancestors = graph_node.ancestors or []
+            source_visible = any(str(ancestor_id) in visible_ids for ancestor_id in source_ancestors)
+            target_visible = any(str(ancestor_id) in visible_ids for ancestor_id in target_ancestors)
+
+            if source_visible or target_visible:
+                filtered_steps.append(node)
+
+        return filtered_steps
+    
+    def _get_nodes_of_trace(self, nodes_of_trace):
+        graph_nodes = set()
+        for node in nodes_of_trace:
+            labels = node.get("data", {}).get("labels", [])
+            if "Action" not in labels:
+                continue
+
+            props = node.get("data", {}).get("properties", {})
+            source_id = props.get("sourceId")
+            target_id = props.get("targetId")
+
+            if source_id is not None:
+                graph_nodes.add(str(source_id))
+            if target_id is not None:
+                graph_nodes.add(str(target_id))
+            
+        return self.graph_service.get_nodes_by_ids(graph_nodes)

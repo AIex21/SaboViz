@@ -72,6 +72,12 @@ class GraphRepository:
     def get_all_edges(self, project_id: int):
         return self.db.query(Edge).filter(Edge.project_id == project_id).all()
     
+    def get_nodes_by_ids(self, node_ids: list[str]):
+        if not node_ids:
+            return []
+        
+        return self.db.query(Node).filter(Node.id.in_(node_ids)).all()
+    
     def get_roots(self, project_id: int):
         roots = self.db.query(Node).filter(
             Node.project_id == project_id,
