@@ -50,20 +50,20 @@ graph LR
 
 | Node | What it does |
 | --- | --- |
-| A | Backend starts the static analysis pipeline for a project. |
-| B | Starts the Rascal container that performs source parsing. |
-| C | Loads Rascal parser settings and path configuration. |
-| D | Resolves external include and dependency directories. |
-| E | Discovers all C/C++ source files to analyze. |
-| F | Controls per-file iteration. |
-| G | Parses one file and extracts its M3 model fragment. |
-| H | Removes or filters irrelevant system/library entities. |
-| I | Checks whether there are remaining files. |
-| J | Merges per-file models into one composed M3 representation. |
-| K | Writes the composed M3 model to JSON. |
-| L | Writes extracted method snippets to JSON. |
-| M | Backend loads produced JSON artifacts from storage. |
-| N | Sends static artifacts to the ontology-building stage. |
+| Backend: Trigger Analysis | Backend starts the static analysis pipeline for a project. |
+| Launch Rascal Docker Container | Starts the Rascal container that performs source parsing. |
+| Load Rascal Configuration | Loads Rascal parser settings and path configuration. |
+| Scan for the external dependencies | Resolves external include and dependency directories. |
+| Find all C and C++ Files | Discovers all C/C++ source files to analyze. |
+| Iterate over Source Files | Controls per-file iteration. |
+| Parse & Extract M3 Model for the file | Parses one file and extracts its M3 model fragment. |
+| Filter System Library Entities | Removes or filters irrelevant system/library entities. |
+| More files? | Checks whether there are remaining files. |
+| Compose Models into Single M3 Model | Merges per-file models into one composed M3 representation. |
+| Save Composed M3 as JSON | Writes the composed M3 model to JSON. |
+| Save Method Snippets as JSON | Writes extracted method snippets to JSON. |
+| Backend Retrieves JSON Files | Backend loads produced JSON artifacts from storage. |
+| Pass to Ontology Builder | Sends static artifacts to the ontology-building stage. |
 
 ## Ontology Builder
 
@@ -112,19 +112,19 @@ graph LR
 
 | Node | What it does |
 | --- | --- |
-| A | Receives the composed static model produced by parsing. |
-| B | Creates the graph root node for the project. |
-| D | Builds folder/file nodes from path structure. |
-| E | Adds structural edges such as contains/includes. |
-| G | Converts declarations into SABO 2.0 semantic node types. |
-| H | Connects files to declared functional entities. |
-| J | Adds semantic dependency edges (invokes, uses, returns, etc.). |
-| L | Compresses trivial folder chains for cleaner hierarchy. |
-| N | Precomputes ancestry and expandability metadata for UI navigation. |
-| O | Persists enriched graph nodes and edges in the database. |
-| P | Decision gate for optional AI summarization. |
-| Q | Sends graph to hierarchical summarizer when enabled. |
-| R | Marks project analysis complete when summarization is disabled. |
+| Receive Composed M3 Model JSON | Receives the composed static model produced by parsing. |
+| Initialize Knowledge Graph with Root Project Node | Creates the graph root node for the project. |
+| Parse File Paths to generate Folder and File Nodes | Builds folder/file nodes from path structure. |
+| Establish 'contains' and 'includes' Directory Edges | Adds structural edges such as contains/includes. |
+| Map M3 Declarations to SABO 2.0 Types: Scope, Type, Operation, Variable | Converts declarations into SABO 2.0 semantic node types. |
+| Establish 'declares' Edges from Files to Functional Nodes | Connects files to declared functional entities. |
+| Map M3 Dependencies to SABO 2.0 Edges: invokes, encloses, uses, returns, etc. | Adds semantic dependency edges (invokes, uses, returns, etc.). |
+| Merge and Collapse Single-Child Folders | Compresses trivial folder chains for cleaner hierarchy. |
+| Compute Ancestry and Parent-Child Expandability Metrics | Precomputes ancestry and expandability metadata for UI navigation. |
+| Save Finalized Nodes and Edges to Database | Persists enriched graph nodes and edges in the database. |
+| Summarization Enabled? | Decision gate for optional AI summarization. |
+| Pass Graph to Hierarchical AI Summarizer | Sends graph to hierarchical summarizer when enabled. |
+| Mark Project as Ready for Visualization | Marks project analysis complete when summarization is disabled. |
 
 ## Hierarchical AI Summarizer
 
@@ -159,19 +159,19 @@ graph LR
 
 | Node | What it does |
 | --- | --- |
-| A | Starts AI summarization for the already-built project graph. |
-| B | Finds root nodes that define summarization entry points. |
-| C | Begins DFS traversal to process graph bottom-up. |
-| D | Checks if deeper child nodes still need processing. |
-| E | Recursively descends into child nodes first. |
-| F | Collects current-node metadata and context. |
-| G | Combines child summaries into parent-ready context. |
-| H | Builds an LLM prompt from gathered context. |
-| I | Calls the LLM to generate a human-readable summary. |
-| J | Stores generated summary on the current node. |
-| K | Checks if summarization reached the root. |
-| L | Propagates summary upward for higher-level aggregation. |
-| M | Ends once root-level summary is completed. |
+| Start: Summarization Process | Starts AI summarization for the already-built project graph. |
+| Identify Project Root Nodes | Finds root nodes that define summarization entry points. |
+| Initiate Depth-First Search Traversal | Begins DFS traversal to process graph bottom-up. |
+| Has unvisited children? | Checks if deeper child nodes still need processing. |
+| Recurse: Traverse Child Node | Recursively descends into child nodes first. |
+| Gather Context for Current Node | Collects current-node metadata and context. |
+| Aggregate Summaries of Children | Combines child summaries into parent-ready context. |
+| Generate LLM Prompt | Builds an LLM prompt from gathered context. |
+| Query LLM for Summary | Calls the LLM to generate a human-readable summary. |
+| Save AI Summary to Node | Stores generated summary on the current node. |
+| Is this the Root Node? | Checks if summarization reached the root. |
+| Pass Summary Up to Parent | Propagates summary upward for higher-level aggregation. |
+| Finish: Project Summarization Complete | Ends once root-level summary is completed. |
 
 ## Dynamic Extractor
 
@@ -189,13 +189,13 @@ graph LR
 
 | Node | What it does |
 | --- | --- |
-| A | Accepts uploaded runtime trace/log input. |
-| B | Parses raw runtime events from the file. |
-| C | Rebuilds chronological function-call execution order. |
-| D | Maps runtime events to static source entities. |
-| E | Computes matching quality metrics (resolved/ambiguous/unresolved). |
-| F | Persists normalized mapped trace as JSON. |
-| G | Stores trace metadata/record in the database. |
+| Upload Runtime Trace File | Accepts uploaded runtime trace/log input. |
+| Extract Raw Log Events | Parses raw runtime events from the file. |
+| Reconstruct Function Call Timeline | Rebuilds chronological function-call execution order. |
+| Link Runtime Events to Source Code | Maps runtime events to static source entities. |
+| Calculate Resolution Metrics Resolved/Ambiguous/Unresolved | Computes matching quality metrics (resolved/ambiguous/unresolved). |
+| Save the mapped trace as JSON File to Disk | Persists normalized mapped trace as JSON. |
+| Create Trace Record in Database | Stores trace metadata/record in the database. |
 
 ## Functional Decomposition
 
@@ -234,19 +234,19 @@ graph LR
 
 | Node | What it does |
 | --- | --- |
-| A | Starts functional decomposition workflow. |
-| B | Loads stored runtime traces for the selected project. |
-| C | Extracts function-level execution signals from traces. |
-| D | Builds binary matrix used by decomposition algorithms. |
-| E | Selects decomposition strategy. |
-| F | Runs agglomerative clustering-based decomposition. |
-| G | Runs graph-community-based decomposition. |
-| H | Reconciles resulting groups with graph ancestry and parent scopes. |
-| I | Checks whether AI naming/summarization is enabled. |
-| J | Uses LLM to generate feature name and summary text. |
-| K | Falls back to statistical/default naming. |
-| L | Persists final feature groups in database. |
-| M | Marks project ready after decomposition completes. |
+| Start Decomposition Process | Starts functional decomposition workflow. |
+| Load Runtime Traces | Loads stored runtime traces for the selected project. |
+| Extract Executed Functions | Extracts function-level execution signals from traces. |
+| Build Binary Feature Execution Matrix | Builds binary matrix used by decomposition algorithms. |
+| Which Method? | Selects decomposition strategy. |
+| Run Agglomerative Decomposition | Runs agglomerative clustering-based decomposition. |
+| Run Graph Community Decomposition | Runs graph-community-based decomposition. |
+| Resolve Logical Parents & Ancestor Scopes | Reconciles resulting groups with graph ancestry and parent scopes. |
+| Is AI Enabled? | Checks whether AI naming/summarization is enabled. |
+| Prompt LLM for Feature Name & Summary | Uses LLM to generate feature name and summary text. |
+| Generate Statistical Default Name | Falls back to statistical/default naming. |
+| Save Feature Node Group to Database | Persists final feature groups in database. |
+| Mark Project Status as Ready | Marks project ready after decomposition completes. |
 
 ## Agglomerative
 
@@ -279,19 +279,19 @@ graph LR
     J --> K[Send Grouped Components to Persistence Layer]
 ```
 
-| Node | What it does |
-| --- | --- |
-| A | Receives execution feature matrix. |
-| B | Applies TF-IDF weighting to emphasize discriminative functions. |
-| C | Normalizes IDF-based importance values. |
-| D | Computes cosine distance between function profiles. |
-| E | Performs hierarchical agglomerative clustering. |
-| F | Forms function groups from clustering result. |
-| G | Calculates average IDF per cluster for specificity scoring. |
-| H | Decision gate for infrastructure vs feature cluster. |
-| I | Labels low-specificity clusters as infrastructure/common utility. |
-| J | Labels high-specificity clusters as feature-specific. |
-| K | Sends categorized groups to persistence layer. |
+| Node | What it does | Why it is useful |
+| --- | --- | --- |
+| Receive Feature Matrix | Receives execution feature matrix. | It gives a single, structured input that all later steps can use consistently. |
+| Apply TF-IDF Transformation | Applies TF-IDF weighting to emphasize discriminative functions. | It reduces noise from always-called utility code and makes real feature signals stand out. |
+| Compute Normalized IDF Scores | Normalizes IDF-based importance values. | It keeps scores on a comparable scale, which improves stable thresholding across projects. |
+| Calculate Cosine Distances | Computes cosine distance between function profiles. | It groups functions by behavioral similarity pattern, not raw call count magnitude. |
+| Perform Agglomerative Clustering | Performs hierarchical agglomerative clustering. | It can discover a natural number of groups via distance threshold instead of forcing a fixed cluster count. |
+| Group Functions into Trace Clusters | Forms function groups from clustering result. | It turns numeric labels into explicit candidate components usable by the rest of the pipeline. |
+| Evaluate Average IDF per Cluster | Calculates average IDF per cluster for specificity scoring. | It provides a simple quality signal to distinguish common utility groups from feature-focused groups. |
+| Below Threshold? | Decision gate for infrastructure vs feature cluster. | It makes the infrastructure/feature split explicit and repeatable. |
+| Tag as Infrastructure / Common Utilities | Labels low-specificity clusters as infrastructure/common utility. | It avoids over-attributing shared technical code to product features. |
+| Tag as Specific Feature | Labels high-specificity clusters as feature-specific. | It keeps groups with strong distinguishing behavior as feature candidates for analysis and naming. |
+| Send Grouped Components to Persistence Layer | Sends categorized groups to persistence layer. | It makes decomposition results available to UI visualization and downstream summarization. |
 
 ## Graph Community
 
@@ -334,19 +334,19 @@ graph LR
     M --> N[Send Features and Infrastructure to Persistence Layer]
 ```
 
-| Node | What it does |
-| --- | --- |
-| A | Receives execution feature matrix. |
-| B | Computes Jaccard similarity/weight for co-executed functions. |
-| C | Builds weighted network from co-execution relations. |
-| D | Runs Leiden community detection on the network. |
-| E | Extracts dense functional communities. |
-| F | Computes association strength metrics. |
-| G | Computes participation coefficients across communities. |
-| H | Combines frequency and topology metrics for infra scoring. |
-| I | Derives adaptive threshold (Otsu) for separation. |
-| J | Isolates cross-cutting/infrastructure nodes. |
-| K | Assigns remaining nodes to primary feature communities. |
-| L | Evaluates overlap rule (alpha) for shared nodes. |
-| M | Produces final overlapping feature groups. |
-| N | Sends final feature and infrastructure sets to persistence layer. |
+| Node | What it does | Why it is useful |
+| --- | --- | --- |
+| Receive Feature Matrix | Receives execution feature matrix. | It provides objective co-execution data for graph construction and partitioning. |
+| Calculate Jaccard Co-execution Weights | Computes Jaccard similarity/weight for co-executed functions. | It measures shared behavior fairly even when functions have different overall frequencies. |
+| Build Weighted Co-execution Network | Builds weighted network from co-execution relations. | It converts trace data into a structure where community algorithms can extract feature-like groups. |
+| Run Leiden Algorithm | Runs Leiden community detection on the network. | It finds high-quality dense communities that often align with functional subsystems. |
+| Identify Dense Functional Partitions | Extracts dense functional communities. | It yields initial feature candidates quickly from graph topology. |
+| Compute Association Scores | Computes association strength metrics. | It enables confident primary assignment and informed overlap decisions per node. |
+| Compute Participation Coefficients | Computes participation coefficients across communities. | It helps detect bridge nodes that are likely shared infrastructure. |
+| Combine Frequency, Participation & Specificity | Combines frequency and topology metrics for infra scoring. | It produces a more robust infrastructure signal than relying on one metric alone. |
+| Calculate Dynamic Otsu Threshold | Derives adaptive threshold (Otsu) for separation. | It adapts automatically to each project's score distribution and reduces manual tuning. |
+| Isolate Cross-Cutting Infrastructure Nodes | Isolates cross-cutting/infrastructure nodes. | It improves feature purity by removing utility code before final grouping. |
+| Assign Remaining Nodes to Primary Community | Assigns remaining nodes to primary feature communities. | It guarantees clear ownership so each node is represented in a main feature group. |
+| Evaluate Overlap Alpha for Shared Nodes | Evaluates overlap rule (alpha) for shared nodes. | It preserves legitimate shared functionality instead of forcing unrealistic single-membership. |
+| Form Final Overlapping Feature Groups | Produces final overlapping feature groups. | It better matches real software architecture, where components can support multiple features. |
+| Send Features and Infrastructure to Persistence Layer | Sends final feature and infrastructure sets to persistence layer. | It makes results reusable in visualization, naming, and subsequent analysis stages. |
