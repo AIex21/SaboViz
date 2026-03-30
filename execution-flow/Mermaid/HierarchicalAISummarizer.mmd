@@ -1,0 +1,24 @@
+graph LR
+    A[Start: Summarization Process] --> B[Identify Project Root Nodes]
+    B --> C[Initiate Depth-First Search Traversal]
+    
+    subgraph Traversal & Aggregation [Bottom-Up Traversal]
+        C --> D{Has unvisited children?}
+        D -->|Yes| E[Recurse: Traverse Child Node]
+        E --> C
+        D -->|No| F[Gather Context for Current Node]
+        F --> G[Aggregate Summaries of Children]
+    end
+    
+    subgraph AI Processing [LLM Execution]
+        G --> H[Generate LLM Prompt]
+        H --> I[Query LLM for Summary]
+    end
+    
+    subgraph State Management [Upward Propagation]
+        I --> J[Save AI Summary to Node]
+        J --> K{Is this the Root Node?}
+        K -->|No| L[Pass Summary Up to Parent]
+        L --> D
+        K -->|Yes| M[Finish: Project Summarization Complete]
+    end

@@ -1,0 +1,24 @@
+graph LR
+    A[Receive Feature Matrix] --> B
+    
+    subgraph FrequencyAnalysis [Frequency Analysis]
+        B[Apply TF-IDF Transformation] --> C[Compute Normalized IDF Scores]
+    end
+    
+    C --> D
+    
+    subgraph ClusteringLayer [Hierarchical Clustering]
+        D[Calculate Cosine Distances] --> E[Perform Agglomerative Clustering]
+        E --> F[Group Functions into Trace Clusters]
+    end
+    
+    F --> G
+    
+    subgraph CategorizationLayer [Infrastructure Filtering]
+        G[Evaluate Average IDF per Cluster] --> H{Below Threshold?}
+        H -->|Yes| I[Tag as Infrastructure / Common Utilities]
+        H -->|No| J[Tag as Specific Feature]
+    end
+    
+    I --> K
+    J --> K[Send Grouped Components to Persistence Layer]

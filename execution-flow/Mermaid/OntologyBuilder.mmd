@@ -1,0 +1,38 @@
+graph LR
+    A[Receive Composed M3 Model JSON] --> B[Initialize Knowledge Graph with Root Project Node]
+    
+    B --> D
+    
+    subgraph DevelopmentLayer [Construct Development Layer]
+        D[Parse File Paths to generate Folder and File Nodes] --> E[Establish 'contains' and 'includes' Directory Edges]
+    end
+    
+    E --> G
+    
+    subgraph FunctionalLayer [Construct Functional Layer]
+        G[Map M3 Declarations to SABO 2.0 Types: Scope, Type, Operation, Variable] --> H[Establish 'declares' Edges from Files to Functional Nodes]
+    end
+    
+    H --> J
+    
+    subgraph RelationalLayer [Construct Relational Layer]
+        J[Map M3 Dependencies to SABO 2.0 Edges: invokes, encloses, uses, returns, etc.]
+    end
+    
+    J --> L
+    
+    subgraph OptimizationLayer [Optimize Graph Hierarchy]
+        L[Merge and Collapse Single-Child Folders]
+    end
+    
+    L --> N
+    
+    subgraph EnrichmentLayer [Enrich Graph for Visualization]
+        N[Compute Ancestry and Parent-Child Expandability Metrics]
+    end
+    
+    N --> O[Save Finalized Nodes and Edges to Database]
+    
+    O --> P{Summarization Enabled?}
+    P -->|Yes| Q[Pass Graph to Hierarchical AI Summarizer]
+    P -->|No| R[Mark Project as Ready for Visualization]

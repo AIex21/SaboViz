@@ -1,0 +1,16 @@
+graph LR
+    A[Backend: Trigger Analysis] --> B[Launch Rascal Docker Container]
+    B --> C[Load Rascal Configuration]
+    C --> D[Scan for the external dependencies]
+    D --> E[Find all C and C++ Files]
+    E --> F{Iterate over Source Files}
+    F --> |For each file| G[Parse & Extract M3 Model for the file]
+    G --> H[Filter System Library Entities]
+    H --> I{More files?}
+    I -->|Yes| F
+    I -->|No| J[Compose Models into Single M3 Model]
+    J --> K[Save Composed M3 as JSON]
+    J --> L[Save Method Snippets as JSON]
+    K --> M[Backend Retrieves JSON Files]
+    L --> M
+    M --> N[Pass to Ontology Builder]

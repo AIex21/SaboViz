@@ -1,0 +1,28 @@
+graph LR
+    A[Start Decomposition Process] --> B
+    
+    subgraph DataPreparation [Data Preparation]
+        B[Load Runtime Traces] --> C[Extract Executed Functions]
+        C --> D[Build Binary Feature Execution Matrix]
+    end
+    
+    D --> E
+    
+    subgraph StrategyRouting [Method Execution]
+        E{Which Method?}
+        E -->|Agglomerative| F[Run Agglomerative Decomposition]
+        E -->|Graph Community| G[Run Graph Community Decomposition]
+    end
+    
+    F --> H
+    G --> H
+    
+    subgraph PersistenceLayer [Persistence & AI Enrichment]
+        H[Resolve Logical Parents & Ancestor Scopes] --> I{Is AI Enabled?}
+        I -->|Yes| J[Prompt LLM for Feature Name & Summary]
+        I -->|No| K[Generate Statistical Default Name]
+        J --> L
+        K --> L[Save Feature Node Group to Database]
+    end
+    
+    L --> M[Mark Project Status as Ready]

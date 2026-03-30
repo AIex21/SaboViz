@@ -1,0 +1,34 @@
+graph LR
+    A[Receive Feature Matrix] --> B
+    
+    subgraph GraphConstruction [Graph Construction]
+        B[Calculate Jaccard Co-execution Weights] --> C[Build Weighted Co-execution Network]
+    end
+    
+    C --> D
+    
+    subgraph CommunityDetection [Community Detection]
+        D[Run Leiden Algorithm] --> E[Identify Dense Functional Partitions]
+    end
+    
+    E --> F
+    
+    subgraph NetworkMetrics [Network Metrics Analysis]
+        F[Compute Association Scores] --> G[Compute Participation Coefficients]
+    end
+    
+    G --> H
+    
+    subgraph InfrastructureIsolation [Infrastructure Isolation]
+        H[Combine Frequency, Participation & Specificity] --> I[Calculate Dynamic Otsu Threshold]
+        I --> J[Isolate Cross-Cutting Infrastructure Nodes]
+    end
+    
+    J --> K
+    
+    subgraph FeatureAssignment [Feature Assignment]
+        K[Assign Remaining Nodes to Primary Community] --> L[Evaluate Overlap Alpha for Shared Nodes]
+        L --> M[Form Final Overlapping Feature Groups]
+    end
+    
+    M --> N[Send Features and Infrastructure to Persistence Layer]

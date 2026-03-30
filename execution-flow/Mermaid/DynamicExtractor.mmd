@@ -1,0 +1,7 @@
+graph LR
+    A[Upload Runtime Trace File] --> B[Extract Raw Log Events]
+    B --> C[Reconstruct Function Call Timeline]
+    C --> D[Link Runtime Events to Source Code]
+    D --> E[Calculate Resolution Metrics Resolved/Ambiguous/Unresolved]
+    E --> F[Save the mapped trace as JSON File to Disk]
+    F --> G[Create Trace Record in Database]
