@@ -184,3 +184,9 @@ Because the compiled environment is large (~ 1.1 GB), it is not stored in the Gi
 * **Resolution Options:**
     * **Process Anyway:** Ignore the errors and proceed with the current analysis.
     * **Delete Project:** Remove the project, fix your `.env` paths to include the missing headers, and re-upload.
+
+## Execution Flows
+
+For component-by-component execution flows (with diagrams and node explanations), see:
+
+- [Execution Flow Documentation](execution-flow/README.md)
