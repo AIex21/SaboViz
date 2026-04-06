@@ -14,7 +14,7 @@ class TraceDecomposition:
     MIN_PROMINENCE = 1.0
     TEXT_HASH_DIM = 128
     CONTEXT_RADIUS = 2
-    PELT_PENALTY = 12.0
+    PELT_PENALTY = 30.0 #Higher values lead to fewer segments, lower values lead to more segments
     PELT_MIN_SIZE = 3
 
     def __init__(self, graph_service):
@@ -28,6 +28,7 @@ class TraceDecomposition:
         allow_ai: bool,
         node_lookup,
         collect_nodes_with_ancestors,
+        pelt_penalty: float | None = None,
     ):
         steps = self._preprocess_trace(trace_data, project_id)
 
@@ -36,7 +37,10 @@ class TraceDecomposition:
 
         coarse_segments = self._coarse_split(steps)
         embedded_segments = self._embed_segments(coarse_segments)
-        pelt_segments = self._apply_pelt_to_embedded_segments(embedded_segments)
+        pelt_segments = self._apply_pelt_to_embedded_segments(
+            embedded_segments,
+            pelt_penalty=pelt_penalty,
+        )
 
         return self._enrich_segments(
             pelt_segments=pelt_segments,
@@ -86,7 +90,7 @@ class TraceDecomposition:
 
                 if linked_nodes:
                     internal_edges = self.graph_service.get_edges_between_nodes(components)
-                    ai_result = summarizer.prompt_feature(linked_nodes, internal_edges, False)
+                    ai_result = summarizer.prompt_micro_feature(linked_nodes, internal_edges)
 
                     ai_name = (ai_result or {}).get("feature_name")
                     ai_description = (ai_result or {}).get("description")
@@ -245,7 +249,7 @@ class TraceDecomposition:
 
         return embedded_segments
 
-    def _apply_pelt_to_embedded_segments(self, embedded_segments):
+    def _apply_pelt_to_embedded_segments(self, embedded_segments, pelt_penalty: float | None = None):
         pelt_segments = []
 
         for embedded_segment in embedded_segments:
@@ -253,7 +257,7 @@ class TraceDecomposition:
                 continue
 
             vectors = [step.get("embedding", []) for step in embedded_segment]
-            change_points = self._run_pelt(vectors)
+            change_points = self._run_pelt(vectors, pelt_penalty=pelt_penalty)
             boundary_points = set(change_points)
 
             micro_segment = []
@@ -269,7 +273,7 @@ class TraceDecomposition:
 
         return pelt_segments
 
-    def _run_pelt(self, vectors):
+    def _run_pelt(self, vectors, pelt_penalty: float | None = None):
         n = len(vectors)
         if n == 0:
             return []
@@ -282,7 +286,7 @@ class TraceDecomposition:
             return []
 
         signal = np.asarray(vectors, dtype=float)
-        penalty = float(self.PELT_PENALTY)
+        penalty = float(self.PELT_PENALTY if pelt_penalty is None else pelt_penalty)
 
         model = rpt.Pelt(model="l2", min_size=min_size, jump=1)
         breakpoints = model.fit(signal).predict(pen=penalty)

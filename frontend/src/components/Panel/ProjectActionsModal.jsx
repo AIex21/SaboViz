@@ -8,6 +8,7 @@ const ProjectActionsModal = ({
     onRerunSummarization,
     onAddTrace,
     onViewTraces,
+    onTraceDecomposition,
     onExtractFeatures,
     onExportStatic
 }) => {
@@ -38,6 +39,11 @@ const ProjectActionsModal = ({
                         <button style={styles.actionTile} onClick={onExtractFeatures}>
                             <div style={styles.tileTitle}>Extract Features</div>
                             <div style={styles.tileDescription}>Start functional decomposition with custom thresholds.</div>
+                        </button>
+
+                        <button style={styles.actionTile} onClick={onTraceDecomposition}>
+                            <div style={styles.tileTitle}>Trace Decomposition</div>
+                            <div style={styles.tileDescription}>Split traces into micro-features and execution flow segments.</div>
                         </button>
 
                         <button style={styles.actionTile} onClick={onRerunSummarization}>

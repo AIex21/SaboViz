@@ -8,6 +8,7 @@ import TraceUploadModal from '../Panel/TraceUploadModal';
 import TraceListModal from '../Panel/TraceListModal';
 import ModalButton from '../Common/ModalButton';
 import DecompositionModal from '../Panel/DecompositionModal'
+import TraceDecompositionModal from '../Panel/TraceDecompositionModal';
 import CreateProjectOptionsModal from '../Panel/CreateProjectOptionsModal';
 import ProjectActionsModal from '../Panel/ProjectActionsModal';
 import { useToast } from '../../context/ToastContext';
@@ -25,6 +26,7 @@ const ProjectsPage = () => {
     const [selectedProjectForTrace, setSelectedProjectForTrace] = useState(null);
     const [viewTracesProject, setViewTracesProject] = useState(null);
     const [selectedProjectForDecomp, setSelectedProjectForDecomp] = useState(null);
+    const [selectedProjectForTraceDecomp, setSelectedProjectForTraceDecomp] = useState(null);
     const [isCreateOptionsModalOpen, setIsCreateOptionsModalOpen] = useState(false);
     const [selectedProjectForActions, setSelectedProjectForActions] = useState(null);
 
@@ -254,6 +256,24 @@ const ProjectsPage = () => {
         }
     };
 
+    const handleConfirmTraceDecomposition = async (
+        projectId,
+        peltPenalty,
+        useAi
+    ) => {
+        try {
+            await projectApi.startTraceDecomposition(projectId, peltPenalty, useAi);
+
+            showToast("Trace decomposition started.", "info");
+
+            setProjects(prev => prev.map(p =>
+                p.id === projectId ? { ...p, status: 'decomposing', description: 'Trace decomposition in progress...' } : p
+            ));
+        } catch (error) {
+            showToast("Failed to start trace decomposition.", "error");
+        }
+    };
+
     return (
         <div style={styles.pageWrapper}>
             <div style={styles.container}>
@@ -447,6 +467,14 @@ const ProjectsPage = () => {
                 />
             )}
 
+            {selectedProjectForTraceDecomp && (
+                <TraceDecompositionModal
+                    project={selectedProjectForTraceDecomp}
+                    onClose={() => setSelectedProjectForTraceDecomp(null)}
+                    onConfirm={handleConfirmTraceDecomposition}
+                />
+            )}
+
             {isCreateOptionsModalOpen && (
                 <CreateProjectOptionsModal
                     projectName={projectName}
@@ -470,6 +498,10 @@ const ProjectsPage = () => {
                     }}
                     onExtractFeatures={() => {
                         setSelectedProjectForDecomp(selectedProjectForActions);
+                        setSelectedProjectForActions(null);
+                    }}
+                    onTraceDecomposition={() => {
+                        setSelectedProjectForTraceDecomp(selectedProjectForActions);
                         setSelectedProjectForActions(null);
                     }}
                     onExportStatic={() => handleExportStatic(selectedProjectForActions)}

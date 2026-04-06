@@ -187,7 +187,6 @@ class FunctionalDecompositionService:
 
         traces = self.load_traces(project_id)
         self.feature_repo.delete_features_by_project(project_id)
-        self.micro_features_repo.clear_project_decomposition(project_id, commit=True)
 
         if not traces:
             self.graph_service.change_project_status(
@@ -204,13 +203,6 @@ class FunctionalDecompositionService:
         allow_ai = use_ai and is_llm_enabled
         db_nodes = self.graph_service.get_all_nodes(project_id)
         node_lookup = {n.id: n for n in db_nodes}
-
-        self._save_project_trace_decomposition(
-            project_id=project_id,
-            summarizer=summarizer,
-            allow_ai=allow_ai,
-            node_lookup=node_lookup,
-        )
 
         method = (decomposition_method or self.DECOMP_METHOD_AGGLOMERATIVE).strip().lower()
 
@@ -251,7 +243,51 @@ class FunctionalDecompositionService:
             description="Functional Decomposition successfully completed.",
         )
 
-    def decompose_traces(self, project_id: int, use_ai: bool = True):
+    def run_trace_decomposition(
+        self,
+        project_id: int,
+        use_ai: bool = True,
+        pelt_penalty: float | None = None,
+    ):
+        self.graph_service.change_project_status(
+            project_id,
+            status="decomposing",
+            description="Trace Decomposition started...",
+        )
+
+        traces = self.trace_service.get_project_traces(project_id)
+        self.micro_features_repo.clear_project_decomposition(project_id, commit=True)
+
+        if not traces:
+            self.graph_service.change_project_status(
+                project_id,
+                status="ready",
+                description="Trace Decomposition completed. No traces with executable operations were found.",
+            )
+            return
+
+        summarizer = SummarizationService(self.db)
+        allow_ai = use_ai and summarizer.llm.is_enabled
+        db_nodes = self.graph_service.get_all_nodes(project_id)
+        node_lookup = {n.id: n for n in db_nodes}
+
+        self._save_project_trace_decomposition(
+            project_id=project_id,
+            summarizer=summarizer,
+            allow_ai=allow_ai,
+            node_lookup=node_lookup,
+            pelt_penalty=pelt_penalty,
+        )
+
+        self.db.commit()
+
+        self.graph_service.change_project_status(
+            project_id,
+            status="ready",
+            description="Trace Decomposition successfully completed.",
+        )
+
+    def decompose_traces(self, project_id: int, use_ai: bool = True, pelt_penalty: float | None = None):
         traces = self.trace_service.get_project_traces(project_id)
 
         segments_per_trace = {}
@@ -271,6 +307,7 @@ class FunctionalDecompositionService:
                 allow_ai=allow_ai,
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
+                pelt_penalty=pelt_penalty,
             )
 
         return segments_per_trace
@@ -294,6 +331,7 @@ class FunctionalDecompositionService:
         summarizer,
         allow_ai: bool,
         node_lookup,
+        pelt_penalty: float | None = None,
     ):
         traces = self.trace_service.get_project_traces(project_id)
 
@@ -306,6 +344,7 @@ class FunctionalDecompositionService:
                 allow_ai=allow_ai,
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
+                pelt_penalty=pelt_penalty,
             )
             self._persist_trace_decomposition(project_id, trace.id, micro_segments)
 

@@ -14,7 +14,8 @@ from app.services.llm_summarization.llm_templates import (
     analyze_file_tool,
     analyze_folder_tool,
     analyze_project_tool,
-    analyze_feature_tool
+    analyze_feature_tool,
+    analyze_micro_feature_tool,
 )
 from app.services.sabo_gen.config import *
 
@@ -350,3 +351,43 @@ class SummarizationService:
         prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_feature_tool)
+
+    def prompt_micro_feature(self, nodes: list[Node], edges: list[Edge]) -> dict:
+        prompt_lines = [
+            "Analyze the following trace segment as a MICRO-FEATURE.",
+            "Focus on the operation flow and describe what concretely happens across this short execution slice.",
+            "",
+            "### Operations in this Trace Segment:"
+        ]
+
+        node_lookup = {}
+        for node in nodes:
+            name = node.properties.get("simpleName", node.id)
+            node_lookup[node.id] = name
+            summary = node.ai_summary.get("description", "") if node.ai_summary else "No summary available."
+            prompt_lines.append(f"- {name}: {summary}")
+
+        if edges:
+            prompt_lines.append("")
+            prompt_lines.append("### Observed Operation Flow:")
+            for edge in edges:
+                source_name = node_lookup.get(edge.source_id)
+                target_name = node_lookup.get(edge.target_id)
+
+                if source_name and target_name:
+                    prompt_lines.append(f"- {source_name} --[{edge.label}]--> {target_name}")
+
+        prompt_lines.append("")
+        prompt_lines.append("FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):")
+        prompt_lines.append("- Treat this as a local execution slice, not a high-level business feature.")
+        prompt_lines.append("- Infer what is happening step-by-step from the provided operation flow and operation summaries.")
+        prompt_lines.append("- The name must be concrete and narrowly scoped to this segment.")
+        prompt_lines.append("- Prefer action-oriented names grounded in observed flow (for example: 'Validate Request Payload', 'Resolve Dependencies', 'Persist Entity State').")
+        prompt_lines.append("- Avoid broad/system-level names and avoid project-domain mentions.")
+        prompt_lines.append("- The description must begin with 'Includes:' and summarize the core transition or sequence represented by this segment.")
+        prompt_lines.append("- Do not invent operations, entities, or transitions that are not present in the input.")
+        prompt_lines.append("- Reuse operation terminology from the provided nodes and edges whenever possible.")
+
+        prompt = "\n".join(prompt_lines) + "\n"
+
+        return self.llm.generate_json(prompt, analyze_micro_feature_tool)

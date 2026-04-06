@@ -159,6 +159,20 @@ export const projectApi = {
         return response.data;
     },
 
+    startTraceDecomposition: async (
+        projectId,
+        peltPenalty = 30.0,
+        useAi = true
+    ) => {
+        const response = await api.post(`/projects/${projectId}/trace-decompose`, null, {
+            params: {
+                pelt_penalty: peltPenalty,
+                use_ai: useAi
+            }
+        });
+        return response.data;
+    },
+
     getFeatures: async (projectId) => {
         const response = await api.get(`/projects/${projectId}/features`);
         return response.data;

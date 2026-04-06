@@ -244,6 +244,30 @@ def start_decomposition(
         return {"message": "Decomposition started in the background"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/projects/{project_id}/trace-decompose")
+def start_trace_decomposition(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    service: FunctionalDecompositionService = Depends(get_decomposition_service),
+    graph_service: GraphService = Depends(get_service),
+    pelt_penalty: float = Query(30.0, gt=0.0, le=500.0, description="Penalty for PELT change-point detection. Higher values create fewer segments."),
+    use_ai: bool = Query(True, description="Use AI for micro-feature naming and descriptions")
+):
+    if not graph_service.get_project_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        background_tasks.add_task(
+            service.run_trace_decomposition,
+            project_id,
+            use_ai,
+            pelt_penalty,
+        )
+        return {"message": "Trace decomposition started in the background"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
 @router.get("/projects/{project_id}/features")
 def get_features(

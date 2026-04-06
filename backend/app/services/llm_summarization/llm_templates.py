@@ -210,3 +210,33 @@ analyze_feature_tool = [{
         "parameters": feature_schema
     }
 }]
+
+# ---------------------------------------------------------
+# 8. MICRO FEATURE SCHEMA (Trace Segments)
+# ---------------------------------------------------------
+micro_feature_schema = {
+    "type": "object",
+    "properties": {
+        "description": {
+            "type": "string",
+            "minLength": 20,
+            "description": "A 1-2 sentence flow-centered summary describing what happens in this trace segment, including key operation transitions. Keep it concrete and avoid broad project/domain context."
+        },
+        "feature_name": {
+            "type": "string",
+            "minLength": 5,
+            "description": "A concise micro-feature label for this trace segment, derived from the concrete operation flow and responsibilities shown in the provided operations and edges."
+        }
+    },
+    "required": ["description", "feature_name"],
+    "additionalProperties": False
+}
+
+analyze_micro_feature_tool = [{
+    "type": "function",
+    "function": {
+        "name": "AnalyzeMicroFeature",
+        "description": "Analyzes a small trace segment to identify a concrete micro-feature and summarize its operation flow.",
+        "parameters": micro_feature_schema
+    }
+}]
