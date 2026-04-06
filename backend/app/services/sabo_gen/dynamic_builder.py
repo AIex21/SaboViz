@@ -139,6 +139,7 @@ class DynamicGraphBuilder:
                     "labels": [NODE_ACTION],
                     "properties": {
                         "step": step['step'],
+                        "depth": current_depth,
                         "sourceId": source_static_id,
                         "targetId": target_static_id,
                         "timestamp": step['timestamp'],

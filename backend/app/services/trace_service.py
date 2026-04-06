@@ -30,6 +30,9 @@ class TraceService:
     def get_project_traces(self, project_id: int):
         return self.repo.get_traces_by_project_id(project_id)
 
+    def get_trace_by_id(self, trace_id: int):
+        return self.repo.get_trace_by_id(trace_id)
+
     def get_trace_file(self, trace_id: int):
         trace = self.repo.get_trace_by_id(trace_id)
         if not trace:

@@ -13,9 +13,13 @@ const SidebarPanel = ({
     activeFeatureIds = new Set(),
     currentTrace = null,
     traceSteps = [],
+    microFeatures = [],
+    activeMicroFeatureId = null,
+    onSelectMicroFeature,
     currentStep = 0,
     onStepChange,
     failureIndices = [],
+    isMicroFeatureFlowLoading = false,
     isDecomposing = false 
 }) => {
     const [activeTab, setActiveTab] = useState('structural');
@@ -58,6 +62,40 @@ const SidebarPanel = ({
         if (raw === 'unresolved') return { key: 'unresolved', label: 'Unresolved', color: THEME.danger };
         return { key: 'unknown', label: 'Unknown', color: '#6b7280' };
     };
+
+    const getMicroFeatureRange = (microFeature) => {
+        const start = Number(microFeature?.start_step);
+        const end = Number(microFeature?.end_step);
+
+        if (Number.isFinite(start) && Number.isFinite(end)) {
+            return `${start}-${end}`;
+        }
+
+        if (Number.isFinite(start)) {
+            return `${start}+`;
+        }
+
+        return 'n/a';
+    };
+
+    const getMicroFeatureLabel = (microFeature, index) => {
+        return String(microFeature?.name || `Segment ${index + 1}`);
+    };
+
+    const getMicroFeatureStepCount = (microFeature) => {
+        const count = Number(microFeature?.step_count);
+        return Number.isFinite(count) && count >= 0 ? count : 0;
+    };
+
+    const focusedMicroFeature = useMemo(() => {
+        if (!microFeatures.length) return null;
+
+        const activeMatch = microFeatures.find(
+            (microFeature) => Number(microFeature?.id) === Number(activeMicroFeatureId)
+        );
+
+        return activeMatch || microFeatures[0];
+    }, [microFeatures, activeMicroFeatureId]);
 
     return (
         <div style={sidebarContainerStyle(isOpen)}>
@@ -212,6 +250,60 @@ const SidebarPanel = ({
                                         <div style={traceSummaryStyle}>
                                             <div style={traceTitleStyle} title={currentTrace.name}>{currentTrace.name}</div>
                                             <div style={traceMetaStyle}>Step {Math.min(currentStep + 1, Math.max(traceSteps.length, 1))} / {traceSteps.length}</div>
+                                        </div>
+
+                                        <div style={microFeatureSectionStyle}>
+                                            <div style={microFeatureHeaderStyle}>
+                                                <span>MICRO-FEATURE FLOW</span>
+                                                <span>{microFeatures.length} segments</span>
+                                            </div>
+
+                                            {isMicroFeatureFlowLoading ? (
+                                                <div style={microFeatureEmptyStateStyle}>Loading micro-feature flow...</div>
+                                            ) : microFeatures.length === 0 ? (
+                                                <div style={microFeatureEmptyStateStyle}>No micro-features available for this trace.</div>
+                                            ) : (
+                                                <>
+                                                    <div style={microFeatureRailStyle}>
+                                                        {microFeatures.map((microFeature, index) => {
+                                                            const microId = Number(microFeature?.id);
+                                                            const isActive = Number(activeMicroFeatureId) === microId;
+
+                                                            return (
+                                                                <React.Fragment key={microFeature?.id || `micro_feature_${index}`}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => onSelectMicroFeature && onSelectMicroFeature(microFeature?.id)}
+                                                                        style={microFeatureChipStyle(isActive)}
+                                                                        title={`${getMicroFeatureLabel(microFeature, index)} | Steps ${getMicroFeatureRange(microFeature)}`}
+                                                                    >
+                                                                        <span style={microFeatureChipIndexStyle}>{index + 1}</span>
+                                                                    </button>
+                                                                    {index < microFeatures.length - 1 && <span style={microFeatureRailArrowStyle}>→</span>}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {focusedMicroFeature && (
+                                                        <div style={microFeatureDetailsCardStyle}>
+                                                            <div style={microFeatureDetailsTitleStyle}>
+                                                                {getMicroFeatureLabel(
+                                                                    focusedMicroFeature,
+                                                                    microFeatures.findIndex((f) => Number(f?.id) === Number(focusedMicroFeature?.id))
+                                                                )}
+                                                            </div>
+                                                            <div style={microFeatureMetaStyle}>
+                                                                <span style={microFeatureRangeBadgeStyle}>Steps {getMicroFeatureRange(focusedMicroFeature)}</span>
+                                                                <span style={microFeatureCountBadgeStyle}>{getMicroFeatureStepCount(focusedMicroFeature)} ops</span>
+                                                            </div>
+                                                            <div style={microFeatureSummaryStyle}>
+                                                                {focusedMicroFeature?.description || 'No summary available for this micro-feature.'}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
 
                                         <div style={traceListStyle}>
@@ -503,6 +595,123 @@ const traceMetaStyle = {
     marginTop: '4px',
     fontSize: '11px',
     color: THEME.textMuted,
+    fontFamily: 'monospace',
+};
+
+const microFeatureSectionStyle = {
+    marginBottom: '10px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '10px',
+    background: 'rgba(255,255,255,0.02)',
+    padding: '8px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+};
+
+const microFeatureHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: THEME.textMuted,
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.5px',
+    fontFamily: 'monospace',
+};
+
+const microFeatureEmptyStateStyle = {
+    fontSize: '11px',
+    color: THEME.textMuted,
+    padding: '4px 2px',
+};
+
+const microFeatureRailStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    overflowX: 'auto',
+    padding: '2px 0 4px 0',
+};
+
+const microFeatureChipStyle = (isActive) => ({
+    width: '24px',
+    height: '24px',
+    borderRadius: '999px',
+    border: '1px solid',
+    borderColor: isActive ? `${THEME.primary}80` : 'rgba(255,255,255,0.12)',
+    background: isActive ? `${THEME.primary}30` : 'rgba(255,255,255,0.04)',
+    color: isActive ? THEME.primary : THEME.textMuted,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    boxShadow: isActive ? `0 0 8px ${THEME.primary}44` : 'none',
+});
+
+const microFeatureChipIndexStyle = {
+    fontFamily: 'monospace',
+    fontSize: '10px',
+    fontWeight: 700,
+};
+
+const microFeatureRailArrowStyle = {
+    color: THEME.textMuted,
+    fontSize: '11px',
+    userSelect: 'none',
+    flexShrink: 0,
+};
+
+const microFeatureDetailsCardStyle = {
+    marginTop: '6px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    background: 'rgba(255,255,255,0.03)',
+    padding: '8px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+};
+
+const microFeatureDetailsTitleStyle = {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: THEME.textMain,
+    lineHeight: '1.35',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+};
+
+const microFeatureSummaryStyle = {
+    fontSize: '11px',
+    color: '#c9d0da',
+    lineHeight: '1.45',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+};
+
+const microFeatureMetaStyle = {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+};
+
+const microFeatureRangeBadgeStyle = {
+    fontSize: '10px',
+    color: THEME.textMuted,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    fontFamily: 'monospace',
+};
+
+const microFeatureCountBadgeStyle = {
+    fontSize: '10px',
+    color: THEME.textMuted,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
     fontFamily: 'monospace',
 };
 

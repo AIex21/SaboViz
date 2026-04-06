@@ -28,6 +28,10 @@ const SaboGraph = ({
     onFeatureToggle,
     currentTrace,
     traceSteps,
+    microFeatures,
+    activeMicroFeatureId,
+    onSelectMicroFeature,
+    isMicroFeatureFlowLoading,
     currentStep,
     onStepChange,
     failureIndices,
@@ -605,6 +609,10 @@ const SaboGraph = ({
                 onFeatureToggle={onFeatureToggle}
                 currentTrace={currentTrace}
                 traceSteps={traceSteps}
+                microFeatures={microFeatures}
+                activeMicroFeatureId={activeMicroFeatureId}
+                onSelectMicroFeature={onSelectMicroFeature}
+                isMicroFeatureFlowLoading={isMicroFeatureFlowLoading}
                 currentStep={currentStep}
                 onStepChange={onStepChange}
                 failureIndices={failureIndices}

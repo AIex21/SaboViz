@@ -67,3 +67,40 @@ class VisibleTraceFilterRequest(BaseModel):
 
 class VisibleTraceStepsResponse(BaseModel):
     steps: List[Dict[str, Any]]
+
+
+class MicroFeatureSummary(BaseModel):
+    id: int
+    project_id: int
+    trace_id: int
+    sequence_order: int
+    name: str
+    description: Optional[str] = None
+    category: str
+    components: List[str] = []
+    step_count: int = 0
+    start_step: Optional[int] = None
+    end_step: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MicroFeatureFlowEdge(BaseModel):
+    id: int
+    project_id: int
+    trace_id: int
+    source_micro_feature_id: int
+    target_micro_feature_id: int
+    sequence_order: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TraceExecutionFlowResponse(BaseModel):
+    trace_id: int
+    micro_features: List[MicroFeatureSummary]
+    flow_edges: List[MicroFeatureFlowEdge]

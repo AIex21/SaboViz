@@ -188,6 +188,20 @@ class GraphRepository:
                 })
 
         return lookup
+    
+    def get_summary_map(self, project_id: int) -> dict:
+        results = (self.db.query(Node.id, Node.ai_summary)
+                        .filter(Node.project_id == project_id,
+                                Node.labels.contains(['Operation']))
+                        .all())
+
+        summary_map = {}
+        for row in results:
+            summary = row.ai_summary
+            if summary:
+                summary_map[row.id] = summary
+        
+        return summary_map
 
     def get_aggregated_edges(self, project_id: int, visible_ids: list[str]):
         if not visible_ids:

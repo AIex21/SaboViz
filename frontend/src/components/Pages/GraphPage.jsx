@@ -92,11 +92,13 @@ function GraphPage() {
   // Trace State
   const [availableTraces, setAvailableTraces] = useState([]);
   const [traceDataMap, setTraceDataMap] = useState({});
+  const [traceExecutionFlowMap, setTraceExecutionFlowMap] = useState({});
   const [selectedTraceId, setSelectedTraceId] = useState("");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showVisibleTraceOnly, setShowVisibleTraceOnly] = useState(false);
   const [visibleTraceSteps, setVisibleTraceSteps] = useState([]);
   const [isVisibleTraceFilterLoading, setIsVisibleTraceFilterLoading] = useState(false);
+  const [isTraceFlowLoading, setIsTraceFlowLoading] = useState(false);
   const [hierarchyMap, setHierarchyMap] = useState({});
   const isFetchingHierarchy = useRef(false);
   const visibleTraceFilterRequestRef = useRef(0);
@@ -151,6 +153,8 @@ function GraphPage() {
         setVisibleTraceSteps([]);
         setIsVisibleTraceFilterLoading(false);
         setTraceDataMap({});
+        setTraceExecutionFlowMap({});
+        setIsTraceFlowLoading(false);
         nodePositionsRef.current = {};
       } catch (error) {
         console.error("Error loading graph data:", error);
@@ -203,13 +207,42 @@ function GraphPage() {
     setSelectedTraceId(traceId);
     setCurrentStepIndex(0);
 
-    if (!traceDataMap[traceId]) {
-      try {
-        const fullContent = await projectApi.getTraceFile(traceId);
-        setTraceDataMap(prev => ({ ...prev, [traceId]: fullContent }) );
-      } catch (error) {
-        console.error("Failed to load trace file:", error);
-        showToast("Failed to load trace data", "error");
+    const shouldLoadTraceFile = !traceDataMap[traceId];
+    const shouldLoadExecutionFlow = !traceExecutionFlowMap[traceId];
+
+    if (!shouldLoadTraceFile && !shouldLoadExecutionFlow) return;
+
+    if (shouldLoadExecutionFlow) {
+      setIsTraceFlowLoading(true);
+    }
+
+    try {
+      const requests = [];
+      if (shouldLoadTraceFile) {
+        requests.push(projectApi.getTraceFile(traceId));
+      }
+      if (shouldLoadExecutionFlow) {
+        requests.push(projectApi.getTraceExecutionFlow(traceId));
+      }
+
+      const results = await Promise.all(requests);
+      let idx = 0;
+
+      if (shouldLoadTraceFile) {
+        const fullContent = results[idx++];
+        setTraceDataMap((prev) => ({ ...prev, [traceId]: fullContent }));
+      }
+
+      if (shouldLoadExecutionFlow) {
+        const executionFlow = results[idx++];
+        setTraceExecutionFlowMap((prev) => ({ ...prev, [traceId]: executionFlow }));
+      }
+    } catch (error) {
+      console.error("Failed to load trace data:", error);
+      showToast("Failed to load trace data", "error");
+    } finally {
+      if (shouldLoadExecutionFlow) {
+        setIsTraceFlowLoading(false);
       }
     }
   };
@@ -228,6 +261,44 @@ function GraphPage() {
   const traceSteps = useMemo(() => {
     return showVisibleTraceOnly ? visibleTraceSteps : rawTraceSteps;
   }, [showVisibleTraceOnly, visibleTraceSteps, rawTraceSteps]);
+
+  const currentTraceExecutionFlow = useMemo(() => {
+    if (!selectedTraceId) return null;
+    return traceExecutionFlowMap[selectedTraceId] || null;
+  }, [selectedTraceId, traceExecutionFlowMap]);
+
+  const traceMicroFeatures = useMemo(() => {
+    return currentTraceExecutionFlow?.micro_features || [];
+  }, [currentTraceExecutionFlow]);
+
+  const currentTraceStepNumber = useMemo(() => {
+    if (!traceSteps.length) return null;
+    const safeIndex = Math.min(currentStepIndex, traceSteps.length - 1);
+    const currentStepObj = traceSteps[safeIndex];
+    const rawStepNumber = Number(currentStepObj?.data?.properties?.step);
+    return Number.isFinite(rawStepNumber) ? rawStepNumber : null;
+  }, [traceSteps, currentStepIndex]);
+
+  const activeMicroFeatureId = useMemo(() => {
+    if (!traceMicroFeatures.length || currentTraceStepNumber == null) return null;
+
+    const active = traceMicroFeatures.find((micro) => {
+      const start = Number(micro?.start_step);
+      const end = Number(micro?.end_step);
+
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        return currentTraceStepNumber >= start && currentTraceStepNumber <= end;
+      }
+
+      if (Number.isFinite(start)) {
+        return currentTraceStepNumber >= start;
+      }
+
+      return false;
+    });
+
+    return active?.id ?? null;
+  }, [traceMicroFeatures, currentTraceStepNumber]);
 
   useEffect(() => {
     if (!traceSteps.length) {
@@ -1280,6 +1351,41 @@ function GraphPage() {
 
   const currentTraceObj = availableTraces.find(t => t.id === selectedTraceId);
 
+  const findTraceStepIndexByStepNumber = (steps, stepNumber) => {
+    if (!Array.isArray(steps) || steps.length === 0 || !Number.isFinite(stepNumber)) {
+      return -1;
+    }
+
+    const exactIndex = steps.findIndex((step) => Number(step?.data?.properties?.step) === stepNumber);
+    if (exactIndex !== -1) return exactIndex;
+
+    return steps.findIndex((step) => Number(step?.data?.properties?.step) > stepNumber);
+  };
+
+  const handleSelectMicroFeature = (microFeatureId) => {
+    const microFeature = traceMicroFeatures.find((item) => Number(item?.id) === Number(microFeatureId));
+    if (!microFeature) return;
+
+    const targetStepNumber = Number(microFeature?.start_step);
+    if (!Number.isFinite(targetStepNumber)) return;
+
+    const activeSteps = showVisibleTraceOnly ? visibleTraceSteps : rawTraceSteps;
+    let targetIndex = findTraceStepIndexByStepNumber(activeSteps, targetStepNumber);
+
+    if (targetIndex === -1 && showVisibleTraceOnly) {
+      setShowVisibleTraceOnly(false);
+      showToast("Selected micro-feature is hidden by visible-only filter. Showing full trace.", "info");
+      targetIndex = findTraceStepIndexByStepNumber(rawTraceSteps, targetStepNumber);
+    }
+
+    if (targetIndex === -1) {
+      showToast("Could not locate the selected micro-feature in trace steps", "info");
+      return;
+    }
+
+    setCurrentStepIndex(targetIndex);
+  };
+
   const handleSummarizeNode = async (nodeId) => {
     try {
       const projectMeta = await projectApi.getProject(projectId);
@@ -1388,6 +1494,10 @@ function GraphPage() {
           onFeatureToggle={handleFeatureToggle}
           currentTrace={currentTraceObj}
           traceSteps={traceSteps}
+          microFeatures={traceMicroFeatures}
+          activeMicroFeatureId={activeMicroFeatureId}
+          onSelectMicroFeature={handleSelectMicroFeature}
+          isMicroFeatureFlowLoading={isTraceFlowLoading}
           currentStep={currentStepIndex}
           onStepChange={setCurrentStepIndex}
           failureIndices={failureIndices}

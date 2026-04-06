@@ -81,6 +81,9 @@ class GraphService:
     def get_operation_map(self, project_id: int) -> dict:
         return self.repo.get_operation_map(project_id)
     
+    def get_summary_map(self, project_id: int) -> dict:
+        return self.repo.get_summary_map(project_id)
+    
     def get_batch_hierarchy(self, project_id: int, node_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         return self.repo.get_batch_hierarchy(project_id, node_ids)
 

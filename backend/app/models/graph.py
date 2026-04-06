@@ -19,6 +19,16 @@ class Project(Base):
 
     traces = relationship("Trace", back_populates="project", cascade="all, delete-orphan")
     features = relationship("Feature", back_populates="project", cascade="all, delete-orphan")
+    trace_micro_features = relationship(
+        "TraceMicroFeature",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    trace_micro_feature_flows = relationship(
+        "TraceMicroFeatureFlow",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 class Node(Base):
     __tablename__ = "nodes"
@@ -73,3 +83,13 @@ class Trace(Base):
     trace_seq_path = Column(String)
 
     project = relationship("Project", back_populates="traces")
+    micro_features = relationship(
+        "TraceMicroFeature",
+        back_populates="trace",
+        cascade="all, delete-orphan",
+    )
+    micro_feature_flows = relationship(
+        "TraceMicroFeatureFlow",
+        back_populates="trace",
+        cascade="all, delete-orphan",
+    )

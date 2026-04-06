@@ -203,6 +203,13 @@ def get_node_hierarchy(
 ):
     return service.get_batch_hierarchy(project_id, node_ids)
 
+@router.get("/projects/{project_id}/test-decomposition")
+def test_decomposition(
+    project_id: int,
+    service: FunctionalDecompositionService = Depends(get_decomposition_service)
+):
+    return service.test(project_id)
+
 @router.post("/projects/{project_id}/decompose")
 def start_decomposition(
     project_id: int,
