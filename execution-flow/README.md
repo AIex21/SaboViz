@@ -22,6 +22,7 @@ Click a component to jump to its full flow and node-by-node explanation.
 - [Hierarchical AI Summarizer](#hierarchical-ai-summarizer)
 - [Dynamic Extractor](#dynamic-extractor)
 - [Functional Decomposition](#functional-decomposition)
+- [Trace Decomposition](#trace-decomposition)
 - [Agglomerative](#agglomerative)
 - [Graph Community](#graph-community)
 
@@ -247,6 +248,76 @@ graph LR
 | Generate Statistical Default Name | Falls back to statistical/default naming. |
 | Save Feature Node Group to Database | Persists final feature groups in database. |
 | Mark Project Status as Ready | Marks project ready after decomposition completes. |
+
+## Trace Decomposition
+
+Source diagram: [Mermaid/TraceDecomposition.mmd](Mermaid/TraceDecomposition.mmd)
+
+```mermaid
+graph LR
+    A[decompose_trace: Start] --> B[Preprocess Trace]
+
+    subgraph Preprocessing [Trace Preprocessing]
+        B --> C[Keep only Action nodes]
+        C --> D[Keep only resolved operations]
+        D --> E[Attach source and target summaries]
+        E --> F[Sort by step number]
+    end
+
+    F --> J
+
+    subgraph EmbeddingAndSegmentation [Embedding and Segmentation]
+        J[Build step base vectors]
+        J --> K[Apply context window averaging]
+        K --> L[Store per-step embedding]
+        L --> M[Run PELT change-point detection]
+        M --> N[Create micro-features]
+    end
+
+    subgraph SegmentEnrichment [Micro-Segment Enrichment]
+        N --> O[Collect segment components]
+        O --> P[Generate micro-feature name and description]
+        P --> T[Build enriched micro-feature]
+    end
+
+    subgraph HierarchicalMerging [Adjacent Hierarchical Clustering]
+        T --> U[Initialize one cluster per micro-feature]
+        U --> V[Compute average linkage for adjacent pairs]
+        V --> W{Best distance <= threshold?}
+        W -->|Yes| X[Merge best adjacent pair]
+        X --> Y[Generate merged cluster name and description]
+        Y --> U
+        W -->|No| AB[Stop merging]
+    end
+
+    AB --> AC[Serialize hierarchical cluster tree]
+    AC --> AD[Return micro-features and hierarchical clusters]
+```
+
+| Node | What it does |
+| --- | --- |
+| decompose_trace: Start | Entry point for trace decomposition of one runtime trace. |
+| Preprocess Trace | Filters and normalizes trace steps before segmentation. |
+| Keep only Action nodes | Removes non-action runtime events. |
+| Keep only resolved operations | Drops unresolved/ambiguous events from decomposition input. |
+| Attach source and target summaries | Enriches each step with operation summaries from the graph store. |
+| Sort by step number | Ensures chronological order before vectorization. |
+| Build step base vectors | Builds numeric plus lexical hashed features for each step. |
+| Apply context window averaging | Adds local neighborhood context to each step vector. |
+| Store per-step embedding | Persists final embedding on each step. |
+| Run PELT change-point detection | Detects boundaries in the step-embedding sequence. |
+| Create micro-features | Splits embedded steps into micro-feature candidates. |
+| Collect segment components | Extracts unique source/target operation IDs per segment. |
+| Generate micro-feature name and description | Produces name and description for each segment using available enrichment logic. |
+| Build enriched micro-feature | Produces final micro-feature with metadata and steps. |
+| Initialize one cluster per micro-feature | Starts hierarchical clustering from single-segment clusters. |
+| Compute average linkage for adjacent pairs | Calculates average pairwise cosine distance between neighboring clusters. |
+| Best distance <= threshold? | Stops or continues merging based on adjacency threshold. |
+| Merge best adjacent pair | Merges the closest neighboring clusters. |
+| Generate merged cluster name and description | Produces merged cluster name and description using available enrichment logic. |
+| Stop merging | Ends iterative merging when no adjacent pair passes threshold. |
+| Serialize hierarchical cluster tree | Converts nested cluster objects to API response structure. |
+| Return micro-features and hierarchical clusters | Returns final decomposition payload for persistence and UI. |
 
 ## Agglomerative
 

@@ -447,12 +447,10 @@ class TraceDecomposition:
 
         # First, create initial clusters for each segment
         for segment in segments:
-            vector = self._build_segment_vector(segment)
             clusters.append({
                 "segments": [segment],
                 "name": segment.get("name"),
                 "description": segment.get("description"),
-                "vector": vector,
                 "children": []
             })
         
@@ -464,10 +462,10 @@ class TraceDecomposition:
                 left_cluster = clusters[i]
                 right_cluster = clusters[i + 1]
 
-                #compute cosine distance between cluster
-                cosine_distance = self._cosine_distance(left_cluster, right_cluster)
-                if cosine_distance < min_distance:
-                    min_distance = cosine_distance
+                # Average-linkage distance between adjacent clusters.
+                linkage_distance = self._average_linkage_distance(left_cluster, right_cluster)
+                if linkage_distance < min_distance:
+                    min_distance = linkage_distance
                     best_merge_index = i
 
             if best_merge_index < 0 or min_distance > distance_threshold:
@@ -482,18 +480,79 @@ class TraceDecomposition:
 
         return clusters
     
-    def _build_segment_vector(self, segment):
-        if isinstance(segment, dict):
-            segments = [segment]
-        elif isinstance(segment, list):
-            segments = [item for item in segment if isinstance(item, dict)]
-        else:
-            segments = []
+    # def _build_segment_vector(self, segment):
+    #     if isinstance(segment, dict):
+    #         segments = [segment]
+    #     elif isinstance(segment, list):
+    #         segments = [item for item in segment if isinstance(item, dict)]
+    #     else:
+    #         segments = []
 
+    #     vectors = []
+    #     for item in segments:
+    #         steps = item.get("steps", [])
+    #         for step in steps:
+    #             embedding = step.get("embedding")
+
+    #             if embedding is None:
+    #                 continue
+
+    #             if isinstance(embedding, np.ndarray):
+    #                 if embedding.size == 0:
+    #                     continue
+    #                 vectors.append(embedding.tolist())
+    #                 continue
+
+    #             if isinstance(embedding, (list, tuple)):
+    #                 if not embedding:
+    #                     continue
+    #                 vectors.append(list(embedding))
+
+    #     if not vectors:
+    #         return None
+        
+    #     return np.mean(np.vstack(vectors), axis=0)
+
+    def _pairwise_cosine_distance(self, vector_a, vector_b):
+        if vector_a is None or vector_b is None:
+            return 1.0
+
+        dot_product = np.dot(vector_a, vector_b)
+        norm_a = np.linalg.norm(vector_a)
+        norm_b = np.linalg.norm(vector_b)
+
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 1.0
+
+        cosine_similarity = dot_product / (norm_a * norm_b)
+        cosine_distance = 1.0 - cosine_similarity
+        return cosine_distance
+
+    def _average_linkage_distance(self, cluster_a, cluster_b):
+        vectors_a = self._cluster_segment_vectors(cluster_a)
+        vectors_b = self._cluster_segment_vectors(cluster_b)
+
+        if not vectors_a or not vectors_b:
+            return 1.0
+
+        total_distance = 0.0
+        pair_count = 0
+
+        for vector_a in vectors_a:
+            for vector_b in vectors_b:
+                total_distance += self._pairwise_cosine_distance(vector_a, vector_b)
+                pair_count += 1
+
+        if pair_count == 0:
+            return 1.0
+
+        return total_distance / float(pair_count)
+
+    def _cluster_segment_vectors(self, cluster):
         vectors = []
-        for item in segments:
-            steps = item.get("steps", [])
-            for step in steps:
+
+        for segment in cluster.get("segments", []) or []:
+            for step in segment.get("steps", []) or []:
                 embedding = step.get("embedding")
 
                 if embedding is None:
@@ -510,32 +569,10 @@ class TraceDecomposition:
                         continue
                     vectors.append(list(embedding))
 
-        if not vectors:
-            return None
-        
-        return np.mean(np.vstack(vectors), axis=0)
-    
-    def _cosine_distance(self, cluster_a, cluster_b):
-        vector_a = cluster_a.get("vector")
-        vector_b = cluster_b.get("vector")
-
-        if vector_a is None or vector_b is None:
-            return 1.0
-
-        dot_product = np.dot(vector_a, vector_b)
-        norm_a = np.linalg.norm(vector_a)
-        norm_b = np.linalg.norm(vector_b)
-
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 1.0
-
-        cosine_similarity = dot_product / (norm_a * norm_b)
-        cosine_distance = 1.0 - cosine_similarity
-        return cosine_distance
+        return vectors
     
     def _merge_clusters(self, cluster_a, cluster_b, summarizer, allow_ai: bool):
         merged_segments = cluster_a.get("segments", []) + cluster_b.get("segments", [])
-        merged_vector = self._build_segment_vector(merged_segments)
         merged_name = f"{cluster_a.get('name', '')} + {cluster_b.get('name', '')}"
         merged_description = f"{cluster_a.get('description', '')} Then {cluster_b.get('description', '')}"
 
@@ -552,7 +589,6 @@ class TraceDecomposition:
 
         return {
             "segments": merged_segments,
-            "vector": merged_vector,
             "name": merged_name,
             "description": merged_description,
             "children": [cluster_a, cluster_b]

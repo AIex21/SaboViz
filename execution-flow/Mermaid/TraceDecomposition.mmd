@@ -1,0 +1,38 @@
+graph LR
+    A[decompose_trace: Start] --> B[Preprocess Trace]
+
+    subgraph Preprocessing [Trace Preprocessing]
+        B --> C[Keep only Action nodes]
+        C --> D[Keep only resolved operations]
+        D --> E[Attach source and target summaries]
+        E --> F[Sort by step number]
+    end
+
+    F --> J
+
+    subgraph EmbeddingAndSegmentation [Embedding and Segmentation]
+        J[Build step base vectors]
+        J --> K[Apply context window averaging]
+        K --> L[Store per-step embedding]
+        L --> M[Run PELT change-point detection]
+        M --> N[Create micro-features]
+    end
+
+    subgraph SegmentEnrichment [Micro-Segment Enrichment]
+        N --> O[Collect segment components]
+        O --> P[Generate micro-feature name and description]
+        P --> T[Build enriched micro-feature]
+    end
+
+    subgraph HierarchicalMerging [Adjacent Hierarchical Clustering]
+        T --> U[Initialize one cluster per micro-feature]
+        U --> V[Compute average linkage for adjacent pairs]
+        V --> W{Best distance <= threshold?}
+        W -->|Yes| X[Merge best adjacent pair]
+        X --> Y[Generate merged cluster name and description]
+        Y --> U
+        W -->|No| AB[Stop merging]
+    end
+
+    AB --> AC[Serialize hierarchical cluster tree]
+    AC --> AD[Return micro-features and hierarchical clusters]
