@@ -240,3 +240,33 @@ analyze_micro_feature_tool = [{
         "parameters": micro_feature_schema
     }
 }]
+
+# ---------------------------------------------------------
+# 9. HIERARCHICAL FEATURE SCHEMA (Merged Consecutive Segments)
+# ---------------------------------------------------------
+hierarchical_feature_schema = {
+    "type": "object",
+    "properties": {
+        "feature_name": {
+            "type": "string",
+            "minLength": 5,
+            "description": "A concise merged feature name that captures the common execution intent across the two consecutive trace segments."
+        },
+        "description": {
+            "type": "string",
+            "minLength": 20,
+            "description": "A 1-2 sentence merged summary that begins with 'Includes:' and combines both segment descriptions into one coherent flow."
+        }
+    },
+    "required": ["feature_name", "description"],
+    "additionalProperties": False
+}
+
+analyze_hierarchical_feature_tool = [{
+    "type": "function",
+    "function": {
+        "name": "AnalyzeHierarchicalFeature",
+        "description": "Merges two consecutive trace segment descriptions into a single higher-level hierarchical feature name and description.",
+        "parameters": hierarchical_feature_schema
+    }
+}]

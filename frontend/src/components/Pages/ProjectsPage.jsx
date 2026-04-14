@@ -259,10 +259,11 @@ const ProjectsPage = () => {
     const handleConfirmTraceDecomposition = async (
         projectId,
         peltPenalty,
+        distanceThreshold,
         useAi
     ) => {
         try {
-            await projectApi.startTraceDecomposition(projectId, peltPenalty, useAi);
+            await projectApi.startTraceDecomposition(projectId, peltPenalty, distanceThreshold, useAi);
 
             showToast("Trace decomposition started.", "info");
 

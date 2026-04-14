@@ -162,11 +162,13 @@ export const projectApi = {
     startTraceDecomposition: async (
         projectId,
         peltPenalty = 30.0,
+        distanceThreshold = 0.5,
         useAi = true
     ) => {
         const response = await api.post(`/projects/${projectId}/trace-decompose`, null, {
             params: {
                 pelt_penalty: peltPenalty,
+                distance_threshold: distanceThreshold,
                 use_ai: useAi
             }
         });

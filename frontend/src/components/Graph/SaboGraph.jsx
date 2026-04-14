@@ -29,6 +29,7 @@ const SaboGraph = ({
     currentTrace,
     traceSteps,
     microFeatures,
+    hierarchicalClusters,
     activeMicroFeatureId,
     onSelectMicroFeature,
     isMicroFeatureFlowLoading,
@@ -610,6 +611,7 @@ const SaboGraph = ({
                 currentTrace={currentTrace}
                 traceSteps={traceSteps}
                 microFeatures={microFeatures}
+                hierarchicalClusters={hierarchicalClusters}
                 activeMicroFeatureId={activeMicroFeatureId}
                 onSelectMicroFeature={onSelectMicroFeature}
                 isMicroFeatureFlowLoading={isMicroFeatureFlowLoading}

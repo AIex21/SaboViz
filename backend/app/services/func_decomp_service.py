@@ -1,5 +1,6 @@
 import re
 from collections import Counter
+from typing import Any
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -248,6 +249,7 @@ class FunctionalDecompositionService:
         project_id: int,
         use_ai: bool = True,
         pelt_penalty: float | None = None,
+        distance_threshold: float = 0.5,
     ):
         self.graph_service.change_project_status(
             project_id,
@@ -277,6 +279,7 @@ class FunctionalDecompositionService:
             allow_ai=allow_ai,
             node_lookup=node_lookup,
             pelt_penalty=pelt_penalty,
+            distance_threshold=distance_threshold,
         )
 
         self.db.commit()
@@ -287,7 +290,7 @@ class FunctionalDecompositionService:
             description="Trace Decomposition successfully completed.",
         )
 
-    def decompose_traces(self, project_id: int, use_ai: bool = True, pelt_penalty: float | None = None):
+    def decompose_traces(self, project_id: int, use_ai: bool = True, pelt_penalty: float | None = None, distance_threshold: float = 0.5):
         traces = self.trace_service.get_project_traces(project_id)
 
         segments_per_trace = {}
@@ -308,6 +311,7 @@ class FunctionalDecompositionService:
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
                 pelt_penalty=pelt_penalty,
+                distance_threshold=distance_threshold,
             )
 
         return segments_per_trace
@@ -320,6 +324,7 @@ class FunctionalDecompositionService:
             "trace_id": trace_id,
             "micro_features": self.micro_features_repo.get_micro_features_by_trace(trace_id),
             "flow_edges": self.micro_features_repo.get_micro_feature_flows_by_trace(trace_id),
+            "hierarchical_clusters": self.micro_features_repo.get_hierarchical_clusters_by_trace(trace_id),
         }
 
     def get_features(self, project_id: int):
@@ -332,12 +337,13 @@ class FunctionalDecompositionService:
         allow_ai: bool,
         node_lookup,
         pelt_penalty: float | None = None,
+        distance_threshold: float = 0.5,
     ):
         traces = self.trace_service.get_project_traces(project_id)
 
         for trace in traces:
             trace_data = self.trace_service.get_trace_file(trace.id)
-            micro_segments = self.trace_decomposition.decompose_trace(
+            decomposition_result = self.trace_decomposition.decompose_trace(
                 trace_data=trace_data,
                 project_id=project_id,
                 summarizer=summarizer,
@@ -345,11 +351,26 @@ class FunctionalDecompositionService:
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
                 pelt_penalty=pelt_penalty,
+                distance_threshold=distance_threshold,
             )
-            self._persist_trace_decomposition(project_id, trace.id, micro_segments)
+            micro_segments = decomposition_result.get("micro_segments", [])
+            hierarchical_clusters = decomposition_result.get("hierarchical_clusters", [])
+            self._persist_trace_decomposition(
+                project_id,
+                trace.id,
+                micro_segments,
+                hierarchical_clusters,
+            )
 
-    def _persist_trace_decomposition(self, project_id: int, trace_id: int, micro_segments):
+    def _persist_trace_decomposition(
+        self,
+        project_id: int,
+        trace_id: int,
+        micro_segments,
+        hierarchical_clusters,
+    ):
         persisted = []
+        persisted_by_segment_index = {}
 
         for segment in micro_segments:
             segment_steps = segment.get("steps", [])
@@ -374,6 +395,9 @@ class FunctionalDecompositionService:
             )
             persisted.append(persisted_row)
 
+            segment_index = int(segment.get("segmentIndex", len(persisted)))
+            persisted_by_segment_index[segment_index] = persisted_row
+
         for index in range(len(persisted) - 1):
             self.micro_features_repo.create_micro_feature_flow(
                 project_id=project_id,
@@ -383,3 +407,85 @@ class FunctionalDecompositionService:
                 sequence_order=index + 1,
                 commit=False,
             )
+
+        if hierarchical_clusters:
+            self._persist_hierarchical_clusters(
+                project_id=project_id,
+                trace_id=trace_id,
+                hierarchical_clusters=hierarchical_clusters,
+                persisted_by_segment_index=persisted_by_segment_index,
+            )
+
+    def _persist_hierarchical_clusters(
+        self,
+        project_id: int,
+        trace_id: int,
+        hierarchical_clusters,
+        persisted_by_segment_index,
+    ):
+        sequence_order = 0
+
+        def persist_cluster(cluster: dict[str, Any], parent_cluster_id: int | None = None) -> tuple[int, int]:
+            nonlocal sequence_order
+            sequence_order += 1
+
+            member_ids = self._resolve_member_micro_feature_ids(
+                cluster,
+                persisted_by_segment_index,
+            )
+
+            ordered_members = [
+                persisted_by_segment_index[index]
+                for index in sorted(persisted_by_segment_index.keys())
+                if persisted_by_segment_index[index].id in member_ids
+            ]
+
+            start_candidates = [row.start_step for row in ordered_members if row.start_step is not None]
+            end_candidates = [row.end_step for row in ordered_members if row.end_step is not None]
+
+            row = self.micro_features_repo.create_hierarchical_cluster(
+                project_id=project_id,
+                trace_id=trace_id,
+                sequence_order=sequence_order,
+                hierarchy_level=0,
+                name=str(cluster.get("name") or f"Cluster_{sequence_order}"),
+                description=cluster.get("description"),
+                member_micro_feature_ids=member_ids,
+                member_count=len(member_ids),
+                start_step=min(start_candidates) if start_candidates else None,
+                end_step=max(end_candidates) if end_candidates else None,
+                parent_cluster_id=parent_cluster_id,
+                commit=False,
+            )
+
+            child_ids = []
+            child_levels = []
+            for child in cluster.get("children", []):
+                child_id, child_level = persist_cluster(child, parent_cluster_id=row.id)
+                child_ids.append(child_id)
+                child_levels.append(child_level)
+
+            if child_ids:
+                row.left_child_cluster_id = child_ids[0]
+                row.right_child_cluster_id = child_ids[1] if len(child_ids) > 1 else None
+                row.hierarchy_level = max(child_levels) + 1
+                self.db.flush()
+
+            return row.id, row.hierarchy_level
+
+        for cluster in hierarchical_clusters:
+            if isinstance(cluster, dict):
+                persist_cluster(cluster)
+
+    def _resolve_member_micro_feature_ids(self, cluster, persisted_by_segment_index) -> list[int]:
+        member_ids = []
+
+        for segment_index in cluster.get("segmentIndexes", []):
+            if not isinstance(segment_index, int):
+                continue
+
+            row = persisted_by_segment_index.get(segment_index)
+            if row:
+                member_ids.append(row.id)
+
+        return sorted(set(member_ids))

@@ -4,11 +4,12 @@ import ModalButton from '../Common/ModalButton';
 
 const TraceDecompositionModal = ({ project, onClose, onConfirm }) => {
     const [peltPenalty, setPeltPenalty] = useState(30.0);
+    const [distanceThreshold, setDistanceThreshold] = useState(0.5);
     const [useAi, setUseAi] = useState(true);
     const [activeTooltip, setActiveTooltip] = useState(null);
 
     const handleSubmit = () => {
-        onConfirm(project.id, peltPenalty, useAi);
+        onConfirm(project.id, peltPenalty, distanceThreshold, useAi);
         onClose();
     };
 
@@ -56,6 +57,41 @@ const TraceDecompositionModal = ({ project, onClose, onConfirm }) => {
                             step="1"
                             value={peltPenalty}
                             onChange={(e) => setPeltPenalty(parseFloat(e.target.value))}
+                            style={styles.slider}
+                        />
+                    </div>
+
+                    <div style={styles.controlGroup}>
+                        <div style={styles.labelRow}>
+                            <label style={styles.label}>Hierarchical Distance Threshold</label>
+                            <div
+                                style={styles.tooltipContainer}
+                                onMouseEnter={() => setActiveTooltip('distance')}
+                                onMouseLeave={() => setActiveTooltip(null)}
+                            >
+                                <span style={styles.questionMark}>?</span>
+                                <div style={{
+                                    ...styles.tooltipText,
+                                    opacity: activeTooltip === 'distance' ? 1 : 0,
+                                    visibility: activeTooltip === 'distance' ? 'visible' : 'hidden',
+                                    transform: activeTooltip === 'distance' ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(10px)'
+                                }}>
+                                    Controls adjacent-cluster merging in hierarchical trace flow.
+                                    <br /><br />
+                                    <strong>Lower threshold:</strong> stricter merging and more fine-grained hierarchy.
+                                    <br />
+                                    <strong>Higher threshold:</strong> more aggressive merging and broader clusters.
+                                </div>
+                            </div>
+                            <span style={styles.valueDisplay}>{distanceThreshold.toFixed(2)}</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={distanceThreshold}
+                            onChange={(e) => setDistanceThreshold(parseFloat(e.target.value))}
                             style={styles.slider}
                         />
                     </div>

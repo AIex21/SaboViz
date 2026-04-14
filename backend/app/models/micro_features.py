@@ -60,3 +60,45 @@ class TraceMicroFeatureFlow(Base):
         "TraceMicroFeature",
         foreign_keys=[target_micro_feature_id],
     )
+
+
+class TraceHierarchicalCluster(Base):
+    __tablename__ = "trace_hierarchical_clusters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False)
+    trace_id = Column(Integer, ForeignKey("traces.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    parent_cluster_id = Column(
+        Integer,
+        ForeignKey("trace_hierarchical_clusters.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    left_child_cluster_id = Column(
+        Integer,
+        ForeignKey("trace_hierarchical_clusters.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    right_child_cluster_id = Column(
+        Integer,
+        ForeignKey("trace_hierarchical_clusters.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    sequence_order = Column(Integer, nullable=False)
+    hierarchy_level = Column(Integer, nullable=False, default=0)
+
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+
+    member_micro_feature_ids = Column(JSON, default=list)
+    member_count = Column(Integer, nullable=False, default=0)
+
+    start_step = Column(Integer, nullable=True)
+    end_step = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="trace_hierarchical_clusters")
+    trace = relationship("Trace", back_populates="hierarchical_clusters")

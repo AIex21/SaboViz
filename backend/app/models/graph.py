@@ -29,6 +29,11 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+    trace_hierarchical_clusters = relationship(
+        "TraceHierarchicalCluster",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 class Node(Base):
     __tablename__ = "nodes"
@@ -90,6 +95,11 @@ class Trace(Base):
     )
     micro_feature_flows = relationship(
         "TraceMicroFeatureFlow",
+        back_populates="trace",
+        cascade="all, delete-orphan",
+    )
+    hierarchical_clusters = relationship(
+        "TraceHierarchicalCluster",
         back_populates="trace",
         cascade="all, delete-orphan",
     )

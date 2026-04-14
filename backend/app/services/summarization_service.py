@@ -16,6 +16,7 @@ from app.services.llm_summarization.llm_templates import (
     analyze_project_tool,
     analyze_feature_tool,
     analyze_micro_feature_tool,
+    analyze_hierarchical_feature_tool,
 )
 from app.services.sabo_gen.config import *
 
@@ -391,3 +392,29 @@ class SummarizationService:
         prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_micro_feature_tool)
+    
+    def prompt_hierarchical_feature(self, description_a: str, description_b: str) -> dict:
+        left_description = (description_a or "").strip() or "No description provided."
+        right_description = (description_b or "").strip() or "No description provided."
+
+        prompt_lines = [
+            "Analyze the following descriptions of two consecutive trace segments and merge them into one hierarchical feature.",
+            "The output must capture the shared/combined execution intent of both segments.",
+            "",
+            "### Consecutive Trace Segment A:",
+            f"- {left_description}",
+            "",
+            "### Consecutive Trace Segment B:",
+            f"- {right_description}",
+            "",
+            "FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):",
+            "- Generate one merged feature_name that is concrete and flow-aware.",
+            "- The description MUST start with 'Includes:' and summarize the combined behavior of both segments.",
+            "- Reuse wording from the provided descriptions whenever possible.",
+            "- Do not introduce entities, operations, or system context not present in the two descriptions.",
+            "- Avoid generic names like 'Merged Feature' unless there is no concrete signal.",
+        ]
+
+        prompt = "\n".join(prompt_lines) + "\n"
+
+        return self.llm.generate_json(prompt, analyze_hierarchical_feature_tool)

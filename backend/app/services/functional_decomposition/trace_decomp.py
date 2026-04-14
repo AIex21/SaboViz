@@ -29,11 +29,15 @@ class TraceDecomposition:
         node_lookup,
         collect_nodes_with_ancestors,
         pelt_penalty: float | None = None,
+        distance_threshold: float = 0.5,
     ):
         steps = self._preprocess_trace(trace_data, project_id)
 
         if not steps:
-            return []
+            return {
+                "micro_segments": [],
+                "hierarchical_clusters": [],
+            }
 
         coarse_segments = self._coarse_split(steps)
         embedded_segments = self._embed_segments(coarse_segments)
@@ -42,7 +46,7 @@ class TraceDecomposition:
             pelt_penalty=pelt_penalty,
         )
 
-        return self._enrich_segments(
+        enriched_segments = self._enrich_segments(
             pelt_segments=pelt_segments,
             summarizer=summarizer,
             allow_ai=allow_ai,
@@ -50,11 +54,23 @@ class TraceDecomposition:
             collect_nodes_with_ancestors=collect_nodes_with_ancestors,
         )
 
+        hierarchical_segments = self._build_adjacent_hierarchical_segments(
+            enriched_segments,
+            distance_threshold=distance_threshold,
+            summarizer=summarizer,
+            allow_ai=allow_ai,
+        )
+
+        return {
+            "micro_segments": enriched_segments,
+            "hierarchical_clusters": self._serialize_hierarchical_clusters(hierarchical_segments),
+        }
+
     def extract_step_numbers(self, segment_steps) -> list[int]:
         step_numbers = []
 
         for step in segment_steps:
-            properties = step.get("properties", {})
+            properties = self._get_step_properties(step)
             value: Any = properties.get("step")
 
             if isinstance(value, (int, float)):
@@ -65,6 +81,22 @@ class TraceDecomposition:
                     step_numbers.append(int(stripped))
 
         return step_numbers
+
+    def _get_step_properties(self, step):
+        if not isinstance(step, dict):
+            return {}
+
+        direct_properties = step.get("properties")
+        if isinstance(direct_properties, dict):
+            return direct_properties
+
+        data = step.get("data")
+        if isinstance(data, dict):
+            nested_properties = data.get("properties")
+            if isinstance(nested_properties, dict):
+                return nested_properties
+
+        return {}
 
     def _enrich_segments(
         self,
@@ -116,7 +148,7 @@ class TraceDecomposition:
         components = set()
 
         for step in segment_steps:
-            properties = step.get("properties", {})
+            properties = self._get_step_properties(step)
 
             source_id = properties.get("sourceId")
             target_id = properties.get("targetId")
@@ -156,7 +188,7 @@ class TraceDecomposition:
         seen = set()
 
         for step in segment_steps:
-            properties = step.get("properties", {})
+            properties = self._get_step_properties(step)
             for key in ("sourceSummary", "targetSummary"):
                 text = self._summary_to_text(properties.get(key)).strip()
                 if not text:
@@ -262,7 +294,7 @@ class TraceDecomposition:
 
             micro_segment = []
             for index, step in enumerate(embedded_segment):
-                micro_segment.append(step.get("data", {}))
+                micro_segment.append(step)
 
                 if (index + 1) in boundary_points:
                     pelt_segments.append(micro_segment)
@@ -406,3 +438,145 @@ class TraceDecomposition:
             vector = [value / norm for value in vector]
 
         return vector
+
+    def _build_adjacent_hierarchical_segments(self, segments, distance_threshold: float, summarizer, allow_ai: bool):
+        if not segments:
+            return []
+        
+        clusters = []
+
+        # First, create initial clusters for each segment
+        for segment in segments:
+            vector = self._build_segment_vector(segment)
+            clusters.append({
+                "segments": [segment],
+                "name": segment.get("name"),
+                "description": segment.get("description"),
+                "vector": vector,
+                "children": []
+            })
+        
+        while len(clusters) > 1:
+            min_distance = float("inf")
+            best_merge_index = -1
+
+            for i in range(len(clusters) - 1):
+                left_cluster = clusters[i]
+                right_cluster = clusters[i + 1]
+
+                #compute cosine distance between cluster
+                cosine_distance = self._cosine_distance(left_cluster, right_cluster)
+                if cosine_distance < min_distance:
+                    min_distance = cosine_distance
+                    best_merge_index = i
+
+            if best_merge_index < 0 or min_distance > distance_threshold:
+                break
+
+            left_cluster = clusters[best_merge_index]
+            right_cluster = clusters[best_merge_index + 1]
+
+            merged_cluster = self._merge_clusters(left_cluster, right_cluster, summarizer, allow_ai)
+            clusters[best_merge_index] = merged_cluster
+            del clusters[best_merge_index + 1]
+
+        return clusters
+    
+    def _build_segment_vector(self, segment):
+        if isinstance(segment, dict):
+            segments = [segment]
+        elif isinstance(segment, list):
+            segments = [item for item in segment if isinstance(item, dict)]
+        else:
+            segments = []
+
+        vectors = []
+        for item in segments:
+            steps = item.get("steps", [])
+            for step in steps:
+                embedding = step.get("embedding")
+
+                if embedding is None:
+                    continue
+
+                if isinstance(embedding, np.ndarray):
+                    if embedding.size == 0:
+                        continue
+                    vectors.append(embedding.tolist())
+                    continue
+
+                if isinstance(embedding, (list, tuple)):
+                    if not embedding:
+                        continue
+                    vectors.append(list(embedding))
+
+        if not vectors:
+            return None
+        
+        return np.mean(np.vstack(vectors), axis=0)
+    
+    def _cosine_distance(self, cluster_a, cluster_b):
+        vector_a = cluster_a.get("vector")
+        vector_b = cluster_b.get("vector")
+
+        if vector_a is None or vector_b is None:
+            return 1.0
+
+        dot_product = np.dot(vector_a, vector_b)
+        norm_a = np.linalg.norm(vector_a)
+        norm_b = np.linalg.norm(vector_b)
+
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 1.0
+
+        cosine_similarity = dot_product / (norm_a * norm_b)
+        cosine_distance = 1.0 - cosine_similarity
+        return cosine_distance
+    
+    def _merge_clusters(self, cluster_a, cluster_b, summarizer, allow_ai: bool):
+        merged_segments = cluster_a.get("segments", []) + cluster_b.get("segments", [])
+        merged_vector = self._build_segment_vector(merged_segments)
+        merged_name = f"{cluster_a.get('name', '')} + {cluster_b.get('name', '')}"
+        merged_description = f"{cluster_a.get('description', '')} Then {cluster_b.get('description', '')}"
+
+        if allow_ai:
+            ai_result = summarizer.prompt_hierarchical_feature(cluster_a.get("description", ""), cluster_b.get("description", ""))
+
+            ai_name = (ai_result or {}).get("feature_name")
+            ai_description = (ai_result or {}).get("description")
+
+            if ai_name:
+                merged_name = ai_name
+            if ai_description:
+                merged_description = ai_description
+
+        return {
+            "segments": merged_segments,
+            "vector": merged_vector,
+            "name": merged_name,
+            "description": merged_description,
+            "children": [cluster_a, cluster_b]
+        }
+
+    def _serialize_hierarchical_clusters(self, clusters):
+        def serialize_cluster(cluster):
+            segment_indexes = []
+            for segment in cluster.get("segments", []):
+                segment_index = segment.get("segmentIndex")
+                if isinstance(segment_index, int):
+                    segment_indexes.append(segment_index)
+
+            children = [
+                serialize_cluster(child)
+                for child in cluster.get("children", [])
+                if isinstance(child, dict)
+            ]
+
+            return {
+                "name": cluster.get("name"),
+                "description": cluster.get("description"),
+                "segmentIndexes": sorted(set(segment_indexes)),
+                "children": children,
+            }
+
+        return [serialize_cluster(cluster) for cluster in clusters if isinstance(cluster, dict)]

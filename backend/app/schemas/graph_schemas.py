@@ -100,7 +100,29 @@ class MicroFeatureFlowEdge(BaseModel):
         from_attributes = True
 
 
+class HierarchicalClusterSummary(BaseModel):
+    id: int
+    project_id: int
+    trace_id: int
+    parent_cluster_id: Optional[int] = None
+    left_child_cluster_id: Optional[int] = None
+    right_child_cluster_id: Optional[int] = None
+    sequence_order: int
+    hierarchy_level: int
+    name: str
+    description: Optional[str] = None
+    member_micro_feature_ids: List[int] = []
+    member_count: int = 0
+    start_step: Optional[int] = None
+    end_step: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class TraceExecutionFlowResponse(BaseModel):
     trace_id: int
     micro_features: List[MicroFeatureSummary]
     flow_edges: List[MicroFeatureFlowEdge]
+    hierarchical_clusters: List[HierarchicalClusterSummary] = []

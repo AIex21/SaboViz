@@ -207,8 +207,11 @@ function GraphPage() {
     setSelectedTraceId(traceId);
     setCurrentStepIndex(0);
 
+    const cachedExecutionFlow = traceExecutionFlowMap[traceId];
+    const hasHierarchicalClusters = Array.isArray(cachedExecutionFlow?.hierarchical_clusters);
+
     const shouldLoadTraceFile = !traceDataMap[traceId];
-    const shouldLoadExecutionFlow = !traceExecutionFlowMap[traceId];
+    const shouldLoadExecutionFlow = !cachedExecutionFlow || !hasHierarchicalClusters;
 
     if (!shouldLoadTraceFile && !shouldLoadExecutionFlow) return;
 
@@ -269,6 +272,10 @@ function GraphPage() {
 
   const traceMicroFeatures = useMemo(() => {
     return currentTraceExecutionFlow?.micro_features || [];
+  }, [currentTraceExecutionFlow]);
+
+  const traceHierarchicalClusters = useMemo(() => {
+    return currentTraceExecutionFlow?.hierarchical_clusters || [];
   }, [currentTraceExecutionFlow]);
 
   const currentTraceStepNumber = useMemo(() => {
@@ -1495,6 +1502,7 @@ function GraphPage() {
           currentTrace={currentTraceObj}
           traceSteps={traceSteps}
           microFeatures={traceMicroFeatures}
+          hierarchicalClusters={traceHierarchicalClusters}
           activeMicroFeatureId={activeMicroFeatureId}
           onSelectMicroFeature={handleSelectMicroFeature}
           isMicroFeatureFlowLoading={isTraceFlowLoading}
