@@ -1,7 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { THEME, EDGE_COLORS, formatKey } from '../../config/graphConfig';
 
 const TRACE_WINDOW_RADIUS = 10;
+const SIDEBAR_COLLAPSED_WIDTH = 60;
+const SIDEBAR_DEFAULT_WIDTH = 300;
+const SIDEBAR_MIN_WIDTH = 260;
+const SIDEBAR_MAX_WIDTH = 700;
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const getAllowedMaxWidth = () => {
+    if (typeof window === 'undefined') return SIDEBAR_MAX_WIDTH;
+    const viewportMax = Math.floor(window.innerWidth * 0.6);
+    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, viewportMax));
+};
 
 const SidebarPanel = ({ 
     isOpen, 
@@ -23,7 +35,79 @@ const SidebarPanel = ({
     isDecomposing = false 
 }) => {
     const [activeTab, setActiveTab] = useState('structural');
+    const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+    const [isResizing, setIsResizing] = useState(false);
+    const sidebarRef = useRef(null);
+    const resizingPointerIdRef = useRef(null);
     const failureSet = useMemo(() => new Set(failureIndices), [failureIndices]);
+
+    useEffect(() => {
+        const handleWindowResize = () => {
+            setSidebarWidth((prevWidth) => Math.min(prevWidth, getAllowedMaxWidth()));
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+        return () => window.removeEventListener('resize', handleWindowResize);
+    }, []);
+
+    useEffect(() => {
+        if (!isResizing || !isOpen) return undefined;
+
+        const handlePointerMove = (event) => {
+            if (
+                resizingPointerIdRef.current !== null &&
+                event.pointerId !== resizingPointerIdRef.current
+            ) {
+                return;
+            }
+
+            const left = sidebarRef.current?.getBoundingClientRect?.().left ?? 20;
+            const nextWidth = clamp(
+                event.clientX - left,
+                SIDEBAR_MIN_WIDTH,
+                getAllowedMaxWidth()
+            );
+
+            setSidebarWidth(nextWidth);
+        };
+
+        const stopResizing = (event) => {
+            if (
+                resizingPointerIdRef.current !== null &&
+                event.pointerId !== resizingPointerIdRef.current
+            ) {
+                return;
+            }
+
+            resizingPointerIdRef.current = null;
+            setIsResizing(false);
+        };
+
+        const previousUserSelect = document.body.style.userSelect;
+        const previousCursor = document.body.style.cursor;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', stopResizing);
+        window.addEventListener('pointercancel', stopResizing);
+
+        return () => {
+            document.body.style.userSelect = previousUserSelect;
+            document.body.style.cursor = previousCursor;
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', stopResizing);
+            window.removeEventListener('pointercancel', stopResizing);
+        };
+    }, [isResizing, isOpen]);
+
+    const handleResizeStart = (event) => {
+        if (!isOpen) return;
+
+        resizingPointerIdRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        setIsResizing(true);
+    };
 
     const nearbySteps = useMemo(() => {
         if (!traceSteps.length) return [];
@@ -98,7 +182,7 @@ const SidebarPanel = ({
     }, [microFeatures, activeMicroFeatureId]);
 
     return (
-        <div style={sidebarContainerStyle(isOpen)}>
+        <div ref={sidebarRef} style={sidebarContainerStyle(isOpen, sidebarWidth, isResizing)}>
             {/* PANEL HEADER */}
             <div style={headerStyle(isOpen)}>
                 {isOpen && (
@@ -347,24 +431,48 @@ const SidebarPanel = ({
                     </div>
                 </div>
             )}
+
+            {isOpen && (
+                <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize sidebar"
+                    onPointerDown={handleResizeStart}
+                    style={resizeHandleStyle(isResizing)}
+                />
+            )}
         </div>
     );
 };
 
 // --- STATES & CONTAINER ---
 
-const sidebarContainerStyle = (isOpen) => ({
-    width: isOpen ? '300px' : '60px', 
+const sidebarContainerStyle = (isOpen, width, isResizing) => ({
+    width: isOpen ? `${width}px` : `${SIDEBAR_COLLAPSED_WIDTH}px`, 
     position: 'absolute', top: '20px', left: '20px', bottom: '20px',
     // #121212 converted to rgba so the blur effect still works!
     backgroundColor: 'rgba(18, 18, 18, 0.95)', 
     backdropFilter: 'blur(20px)',
     border: `1px solid rgba(255,255,255,0.08)`, 
     borderRadius: '16px',
-    transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', 
+    transition: isResizing ? 'none' : 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', 
     zIndex: 100,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
     boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+});
+
+const resizeHandleStyle = (isResizing) => ({
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '10px',
+    cursor: 'col-resize',
+    touchAction: 'none',
+    zIndex: 120,
+    background: isResizing
+        ? 'linear-gradient(to right, transparent 0%, rgba(255,255,255,0.28) 80%, rgba(255,255,255,0.38) 100%)'
+        : 'linear-gradient(to right, transparent 0%, rgba(255,255,255,0.08) 80%, rgba(255,255,255,0.16) 100%)',
 });
 
 const headerStyle = (isOpen) => ({
