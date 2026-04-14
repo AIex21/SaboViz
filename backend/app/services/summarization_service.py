@@ -385,7 +385,7 @@ class SummarizationService:
         prompt_lines.append("- The name must be concrete and narrowly scoped to this segment.")
         prompt_lines.append("- Prefer action-oriented names grounded in observed flow (for example: 'Validate Request Payload', 'Resolve Dependencies', 'Persist Entity State').")
         prompt_lines.append("- Avoid broad/system-level names and avoid project-domain mentions.")
-        prompt_lines.append("- The description must begin with 'Includes:' and summarize the core transition or sequence represented by this segment.")
+        prompt_lines.append("- The description should summarize the core transition or sequence represented by this segment.")
         prompt_lines.append("- Do not invent operations, entities, or transitions that are not present in the input.")
         prompt_lines.append("- Reuse operation terminology from the provided nodes and edges whenever possible.")
 
@@ -409,7 +409,7 @@ class SummarizationService:
             "",
             "FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):",
             "- Generate one merged feature_name that is concrete and flow-aware.",
-            "- The description MUST start with 'Includes:' and summarize the combined behavior of both segments.",
+            "- The description should summarize the combined behavior of both segments in clear, concrete language.",
             "- Reuse wording from the provided descriptions whenever possible.",
             "- Do not introduce entities, operations, or system context not present in the two descriptions.",
             "- Avoid generic names like 'Merged Feature' unless there is no concrete signal.",

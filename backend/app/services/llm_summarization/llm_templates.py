@@ -255,7 +255,7 @@ hierarchical_feature_schema = {
         "description": {
             "type": "string",
             "minLength": 20,
-            "description": "A 1-2 sentence merged summary that begins with 'Includes:' and combines both segment descriptions into one coherent flow."
+            "description": "A 1-2 sentence merged summary that combines both segment descriptions into one coherent flow."
         }
     },
     "required": ["feature_name", "description"],

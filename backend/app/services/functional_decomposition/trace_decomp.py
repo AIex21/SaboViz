@@ -205,7 +205,7 @@ class TraceDecomposition:
             preview = "; ".join(summary_lines[:3])
             if len(summary_lines) > 3:
                 preview += "; ..."
-            return f"Includes: {preview}"
+            return preview
 
         operation_names = []
         for uri in self._collect_segment_components(segment_steps):

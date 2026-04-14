@@ -44,7 +44,6 @@ const SidebarPanel = ({
     const [activeTab, setActiveTab] = useState('structural');
     const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
-    const [traceFlowMode, setTraceFlowMode] = useState('micro');
     const [clusterDrillPath, setClusterDrillPath] = useState([]);
     const [selectedClusterId, setSelectedClusterId] = useState(null);
     const sidebarRef = useRef(null);
@@ -52,7 +51,6 @@ const SidebarPanel = ({
     const failureSet = useMemo(() => new Set(failureIndices), [failureIndices]);
 
     useEffect(() => {
-        setTraceFlowMode('micro');
         setClusterDrillPath([]);
         setSelectedClusterId(null);
     }, [currentTrace?.id]);
@@ -432,6 +430,13 @@ const SidebarPanel = ({
         }
     };
 
+    const handleMicroFeatureSelect = (microFeatureId) => {
+        setSelectedClusterId(null);
+        if (microFeatureId != null && onSelectMicroFeature) {
+            onSelectMicroFeature(microFeatureId);
+        }
+    };
+
     const clusterNameById = useMemo(() => {
         const map = new Map();
 
@@ -564,6 +569,94 @@ const SidebarPanel = ({
 
         return rootClusters[0] || null;
     }, [clusterById, selectedClusterId, currentDrillCluster, activeClusterIds, orderedHierarchicalClusters, rootClusters]);
+
+    const focusedMicroFeatureIndex = useMemo(() => {
+        if (!focusedMicroFeature) return -1;
+        return microFeatures.findIndex((feature) => Number(feature?.id) === Number(focusedMicroFeature?.id));
+    }, [focusedMicroFeature, microFeatures]);
+
+    const selectedClusterForMicroHighlight = useMemo(() => {
+        return clusterById.get(toFiniteNumberOrNull(selectedClusterId)) || null;
+    }, [clusterById, selectedClusterId]);
+
+    const selectedClusterMicroFeatureIds = useMemo(() => {
+        if (!selectedClusterForMicroHighlight) return new Set();
+
+        const memberIds = Array.isArray(selectedClusterForMicroHighlight?.member_micro_feature_ids)
+            ? selectedClusterForMicroHighlight.member_micro_feature_ids
+            : [];
+
+        return new Set(
+            memberIds
+                .map((memberId) => toFiniteNumberOrNull(memberId))
+                .filter((memberId) => memberId !== null)
+        );
+    }, [selectedClusterForMicroHighlight]);
+
+    const traceDetailsCard = useMemo(() => {
+        const selectedCluster = clusterById.get(toFiniteNumberOrNull(selectedClusterId));
+
+        if (selectedCluster) {
+            const selectedClusterChildren = getClusterChildren(selectedCluster);
+            if (selectedClusterChildren.length === 0) {
+                const leafMicroFeatureId = getClusterStepAnchorMicroFeatureId(selectedCluster);
+                const leafMicroFeature = microFeatureById.get(toFiniteNumberOrNull(leafMicroFeatureId));
+
+                if (leafMicroFeature) {
+                    const index = microFeatures.findIndex(
+                        (feature) => Number(feature?.id) === Number(leafMicroFeature?.id)
+                    );
+
+                    return {
+                        kind: 'Micro-Feature',
+                        title: getMicroFeatureLabel(leafMicroFeature, index >= 0 ? index : 0),
+                        rangeLabel: `Steps ${getMicroFeatureRange(leafMicroFeature)}`,
+                        countLabel: `${getMicroFeatureStepCount(leafMicroFeature)} ops`,
+                        description: leafMicroFeature?.description || 'No summary available for this micro-feature.',
+                    };
+                }
+            }
+
+            return {
+                kind: 'Cluster',
+                title: selectedCluster?.name || 'Cluster',
+                rangeLabel: `Steps ${formatClusterRange(selectedCluster)}`,
+                countLabel: `${getClusterMemberCount(selectedCluster)} segments`,
+                description: selectedCluster?.description || 'No summary available for this cluster.',
+            };
+        }
+
+        if (focusedMicroFeature) {
+            const index = focusedMicroFeatureIndex >= 0 ? focusedMicroFeatureIndex : 0;
+            return {
+                kind: 'Micro-Feature',
+                title: getMicroFeatureLabel(focusedMicroFeature, index),
+                rangeLabel: `Steps ${getMicroFeatureRange(focusedMicroFeature)}`,
+                countLabel: `${getMicroFeatureStepCount(focusedMicroFeature)} ops`,
+                description: focusedMicroFeature?.description || 'No summary available for this micro-feature.',
+            };
+        }
+
+        if (focusedCluster) {
+            return {
+                kind: 'Cluster',
+                title: focusedCluster?.name || 'Cluster',
+                rangeLabel: `Steps ${formatClusterRange(focusedCluster)}`,
+                countLabel: `${getClusterMemberCount(focusedCluster)} segments`,
+                description: focusedCluster?.description || 'No summary available for this cluster.',
+            };
+        }
+
+        return null;
+    }, [
+        clusterById,
+        selectedClusterId,
+        focusedMicroFeature,
+        focusedMicroFeatureIndex,
+        focusedCluster,
+        microFeatureById,
+        microFeatures,
+    ]);
 
     return (
         <div ref={sidebarRef} style={sidebarContainerStyle(isOpen, sidebarWidth, isResizing)}>
@@ -722,129 +815,104 @@ const SidebarPanel = ({
 
                                         <div style={microFeatureSectionStyle}>
                                             <div style={microFeatureHeaderStyle}>
-                                                <span>{traceFlowMode === 'hierarchical' ? 'HIERARCHICAL FLOW' : 'MICRO-FEATURE FLOW'}</span>
-                                                <span>
-                                                    {traceFlowMode === 'hierarchical'
-                                                        ? `${visibleHierarchicalClusters.length} nodes`
-                                                        : `${microFeatures.length} segments`}
-                                                </span>
-                                            </div>
-
-                                            <div style={traceModeSwitchStyle}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTraceFlowMode('micro')}
-                                                    style={traceModeButtonStyle(traceFlowMode === 'micro')}
-                                                >
-                                                    Micro
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTraceFlowMode('hierarchical')}
-                                                    style={traceModeButtonStyle(traceFlowMode === 'hierarchical')}
-                                                >
-                                                    Hierarchical
-                                                </button>
+                                                <span>TRACE FLOWS</span>
+                                                <span>{`${visibleHierarchicalClusters.length} clusters | ${microFeatures.length} segments`}</span>
                                             </div>
 
                                             {isMicroFeatureFlowLoading ? (
                                                 <div style={microFeatureEmptyStateStyle}>
-                                                    {traceFlowMode === 'hierarchical'
-                                                        ? 'Loading hierarchical flow...'
-                                                        : 'Loading micro-feature flow...'}
+                                                    Loading hierarchical and micro-feature flows...
                                                 </div>
-                                            ) : traceFlowMode === 'micro' && microFeatures.length === 0 ? (
-                                                <div style={microFeatureEmptyStateStyle}>No micro-features available for this trace.</div>
-                                            ) : traceFlowMode === 'hierarchical' && orderedHierarchicalClusters.length === 0 ? (
-                                                <div style={microFeatureEmptyStateStyle}>No hierarchical clusters available for this trace.</div>
                                             ) : (
                                                 <>
-                                                    {traceFlowMode === 'micro' && (
-                                                        <>
-                                                            <div style={microFeatureRailStyle}>
-                                                                {microFeatures.map((microFeature, index) => {
-                                                                    const microId = Number(microFeature?.id);
-                                                                    const isActive = Number(activeMicroFeatureId) === microId;
+                                                    <div style={flowLaneSectionStyle}>
+                                                        <div style={flowLaneHeaderStyle}>
+                                                            <span>Hierarchical Flow</span>
+                                                            <span>{`${visibleHierarchicalClusters.length} nodes`}</span>
+                                                        </div>
 
-                                                                    return (
-                                                                        <React.Fragment key={microFeature?.id || `micro_feature_${index}`}>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => onSelectMicroFeature && onSelectMicroFeature(microFeature?.id)}
-                                                                                style={microFeatureChipStyle(isActive)}
-                                                                                title={`${getMicroFeatureLabel(microFeature, index)} | Steps ${getMicroFeatureRange(microFeature)}`}
-                                                                            >
-                                                                                <span style={microFeatureChipIndexStyle}>{index + 1}</span>
-                                                                            </button>
-                                                                            {index < microFeatures.length - 1 && <span style={microFeatureRailArrowStyle}>→</span>}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </div>
-
-                                                            {focusedMicroFeature && (
-                                                                <div style={microFeatureDetailsCardStyle}>
-                                                                    <div style={microFeatureDetailsTitleStyle}>
-                                                                        {getMicroFeatureLabel(
-                                                                            focusedMicroFeature,
-                                                                            microFeatures.findIndex((f) => Number(f?.id) === Number(focusedMicroFeature?.id))
+                                                        <div style={hierarchyBreadcrumbStyle}>
+                                                            {drillBreadcrumbs.map((crumb, index) => {
+                                                                const isCurrent = index === drillBreadcrumbs.length - 1;
+                                                                return (
+                                                                    <React.Fragment key={crumb.key}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDrillBreadcrumb(crumb.path)}
+                                                                            style={hierarchyBreadcrumbButtonStyle(isCurrent)}
+                                                                            title={crumb.label}
+                                                                            disabled={isCurrent}
+                                                                        >
+                                                                            {crumb.compactLabel || crumb.label}
+                                                                        </button>
+                                                                        {index < drillBreadcrumbs.length - 1 && (
+                                                                            <span style={hierarchyBreadcrumbSeparatorStyle}>/</span>
                                                                         )}
-                                                                    </div>
-                                                                    <div style={microFeatureMetaStyle}>
-                                                                        <span style={microFeatureRangeBadgeStyle}>Steps {getMicroFeatureRange(focusedMicroFeature)}</span>
-                                                                        <span style={microFeatureCountBadgeStyle}>{getMicroFeatureStepCount(focusedMicroFeature)} ops</span>
-                                                                    </div>
-                                                                    <div style={microFeatureSummaryStyle}>
-                                                                        {focusedMicroFeature?.description || 'No summary available for this micro-feature.'}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )}
+                                                                    </React.Fragment>
+                                                                );
+                                                            })}
+                                                        </div>
 
-                                                    {traceFlowMode === 'hierarchical' && (
-                                                        <>
-                                                            <div style={hierarchyBreadcrumbStyle}>
-                                                                {drillBreadcrumbs.map((crumb, index) => {
-                                                                    const isCurrent = index === drillBreadcrumbs.length - 1;
-                                                                    return (
-                                                                        <React.Fragment key={crumb.key}>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => handleDrillBreadcrumb(crumb.path)}
-                                                                                style={hierarchyBreadcrumbButtonStyle(isCurrent)}
-                                                                                title={crumb.label}
-                                                                                disabled={isCurrent}
-                                                                            >
-                                                                                {crumb.compactLabel || crumb.label}
-                                                                            </button>
-                                                                            {index < drillBreadcrumbs.length - 1 && (
-                                                                                <span style={hierarchyBreadcrumbSeparatorStyle}>/</span>
-                                                                            )}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </div>
-
-                                                            <div style={hierarchicalInlineRailStyle}>
-                                                                {visibleHierarchicalClusters.length > 0
+                                                        <div style={hierarchicalInlineRailStyle}>
+                                                            {orderedHierarchicalClusters.length === 0
+                                                                ? <span style={microFeatureEmptyStateStyle}>No hierarchical clusters available for this trace.</span>
+                                                                : visibleHierarchicalClusters.length > 0
                                                                     ? renderDrilldownLane(visibleHierarchicalClusters)
                                                                     : <span style={microFeatureEmptyStateStyle}>No child clusters at this level.</span>}
-                                                            </div>
-                                                        </>
-                                                    )}
+                                                        </div>
+                                                    </div>
 
-                                                    {traceFlowMode === 'hierarchical' && focusedCluster && (
+                                                    <div style={flowLaneSectionStyle}>
+                                                        <div style={flowLaneHeaderStyle}>
+                                                            <span>Micro-Feature Flow</span>
+                                                            <span>{`${microFeatures.length} segments`}</span>
+                                                        </div>
+
+                                                        {microFeatures.length === 0 ? (
+                                                            <div style={microFeatureEmptyStateStyle}>No micro-features available for this trace.</div>
+                                                        ) : (
+                                                            <>
+                                                                <div style={microFeatureRailStyle}>
+                                                                    {microFeatures.map((microFeature, index) => {
+                                                                        const microId = Number(microFeature?.id);
+                                                                        const isPrimaryActive = Number(activeMicroFeatureId) === microId;
+                                                                        const isClusterLinked = selectedClusterMicroFeatureIds.has(microId);
+                                                                        const isActive = isPrimaryActive || isClusterLinked;
+
+                                                                        return (
+                                                                            <React.Fragment key={microFeature?.id || `micro_feature_${index}`}>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleMicroFeatureSelect(microFeature?.id)}
+                                                                                    style={microFeatureChipStyle(isActive, isClusterLinked)}
+                                                                                    title={`${getMicroFeatureLabel(microFeature, index)} | Steps ${getMicroFeatureRange(microFeature)}`}
+                                                                                >
+                                                                                    <span style={microFeatureChipIndexStyle}>{index + 1}</span>
+                                                                                </button>
+                                                                                {index < microFeatures.length - 1 && <span style={microFeatureRailArrowStyle}>→</span>}
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    {traceDetailsCard && (
                                                         <div style={microFeatureDetailsCardStyle}>
+                                                            <div style={microFeatureMetaStyle}>
+                                                                <span style={flowDetailTypeBadgeStyle}>{traceDetailsCard.kind}</span>
+                                                            </div>
                                                             <div style={microFeatureDetailsTitleStyle}>
-                                                                {focusedCluster?.name || 'Cluster'}
+                                                                {traceDetailsCard.title}
                                                             </div>
                                                             <div style={microFeatureMetaStyle}>
-                                                                <span style={microFeatureRangeBadgeStyle}>Steps {formatClusterRange(focusedCluster)}</span>
-                                                                <span style={microFeatureCountBadgeStyle}>{getClusterMemberCount(focusedCluster)} segments</span>
+                                                                <span style={microFeatureRangeBadgeStyle}>{traceDetailsCard.rangeLabel}</span>
+                                                                <span style={microFeatureCountBadgeStyle}>{traceDetailsCard.countLabel}</span>
                                                             </div>
                                                             <div style={microFeatureSummaryStyle}>
-                                                                {focusedCluster?.description || 'No summary available for this cluster.'}
+                                                                {traceDetailsCard.description}
                                                             </div>
                                                         </div>
                                                     )}
@@ -1189,33 +1257,27 @@ const microFeatureHeaderStyle = {
     fontFamily: 'monospace',
 };
 
-const traceModeSwitchStyle = {
+const flowLaneSectionStyle = {
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    background: 'rgba(255,255,255,0.02)',
+    padding: '7px',
     display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '3px',
-    borderRadius: '999px',
-    border: '1px solid rgba(255,255,255,0.09)',
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)',
-    width: 'fit-content',
+    flexDirection: 'column',
+    gap: '5px',
 };
 
-const traceModeButtonStyle = (isActive) => ({
-    border: '1px solid',
-    borderColor: isActive ? `${THEME.primary}85` : 'transparent',
-    background: isActive
-        ? `linear-gradient(180deg, ${THEME.primary}35 0%, ${THEME.primary}1f 100%)`
-        : 'rgba(255,255,255,0.01)',
-    color: isActive ? '#dbeafe' : THEME.textMuted,
-    borderRadius: '999px',
-    padding: '3px 10px',
+const flowLaneHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: '#9fb0c9',
     fontSize: '10px',
     fontWeight: 700,
-    letterSpacing: '0.2px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: isActive ? `0 0 12px ${THEME.primary}30` : 'none',
-});
+    letterSpacing: '0.35px',
+    textTransform: 'uppercase',
+    fontFamily: 'monospace',
+};
 
 const microFeatureEmptyStateStyle = {
     fontSize: '11px',
@@ -1231,20 +1293,36 @@ const microFeatureRailStyle = {
     padding: '2px 0 4px 0',
 };
 
-const microFeatureChipStyle = (isActive) => ({
+const microFeatureChipStyle = (isActive, isClusterLinked = false) => ({
     width: '24px',
     height: '24px',
     borderRadius: '999px',
     border: '1px solid',
-    borderColor: isActive ? `${THEME.primary}80` : 'rgba(255,255,255,0.12)',
-    background: isActive ? `${THEME.primary}30` : 'rgba(255,255,255,0.04)',
-    color: isActive ? THEME.primary : THEME.textMuted,
+    borderColor: isActive
+        ? isClusterLinked
+            ? 'rgba(34,197,94,0.85)'
+            : `${THEME.primary}80`
+        : 'rgba(255,255,255,0.12)',
+    background: isActive
+        ? isClusterLinked
+            ? 'rgba(16,185,129,0.24)'
+            : `${THEME.primary}30`
+        : 'rgba(255,255,255,0.04)',
+    color: isActive
+        ? isClusterLinked
+            ? '#bbf7d0'
+            : THEME.primary
+        : THEME.textMuted,
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    boxShadow: isActive ? `0 0 8px ${THEME.primary}44` : 'none',
+    boxShadow: isActive
+        ? isClusterLinked
+            ? '0 0 10px rgba(34,197,94,0.40)'
+            : `0 0 8px ${THEME.primary}44`
+        : 'none',
 });
 
 const microFeatureChipIndexStyle = {
@@ -1399,6 +1477,16 @@ const microFeatureCountBadgeStyle = {
     fontSize: '10px',
     color: THEME.textMuted,
     background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    fontFamily: 'monospace',
+};
+
+const flowDetailTypeBadgeStyle = {
+    fontSize: '10px',
+    color: '#bfdbfe',
+    background: 'rgba(59,130,246,0.20)',
+    border: '1px solid rgba(96,165,250,0.35)',
     borderRadius: '10px',
     padding: '1px 7px',
     fontFamily: 'monospace',
