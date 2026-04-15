@@ -44,19 +44,19 @@ const SidebarPanel = ({
     const [activeTab, setActiveTab] = useState('structural');
     const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
-    const [clusterDrillPath, setClusterDrillPath] = useState([]);
+    const [expandedClusterIds, setExpandedClusterIds] = useState([]);
     const [selectedClusterId, setSelectedClusterId] = useState(null);
     const sidebarRef = useRef(null);
     const resizingPointerIdRef = useRef(null);
     const failureSet = useMemo(() => new Set(failureIndices), [failureIndices]);
 
     useEffect(() => {
-        setClusterDrillPath([]);
+        setExpandedClusterIds([]);
         setSelectedClusterId(null);
     }, [currentTrace?.id]);
 
     useEffect(() => {
-        setClusterDrillPath([]);
+        setExpandedClusterIds([]);
         setSelectedClusterId(null);
     }, [hierarchicalClusters]);
 
@@ -184,21 +184,6 @@ const SidebarPanel = ({
     const getMicroFeatureLabel = (microFeature, index) => {
         return String(microFeature?.name || `Segment ${index + 1}`);
     };
-
-    const getMicroFeatureStepCount = (microFeature) => {
-        const count = Number(microFeature?.step_count);
-        return Number.isFinite(count) && count >= 0 ? count : 0;
-    };
-
-    const focusedMicroFeature = useMemo(() => {
-        if (!microFeatures.length) return null;
-
-        const activeMatch = microFeatures.find(
-            (microFeature) => Number(microFeature?.id) === Number(activeMicroFeatureId)
-        );
-
-        return activeMatch || microFeatures[0];
-    }, [microFeatures, activeMicroFeatureId]);
 
     const currentTraceStepNumber = useMemo(() => {
         if (!traceSteps.length) return null;
@@ -345,20 +330,6 @@ const SidebarPanel = ({
         };
     };
 
-    const formatClusterRange = (cluster) => {
-        const { start, end } = getClusterRange(cluster);
-
-        if (start !== null && end !== null) {
-            return `${start}-${end}`;
-        }
-
-        if (start !== null) {
-            return `${start}+`;
-        }
-
-        return 'n/a';
-    };
-
     const activeClusterIds = useMemo(() => {
         if (currentTraceStepNumber == null) return new Set();
 
@@ -387,17 +358,6 @@ const SidebarPanel = ({
     const getCompactText = (value, maxLength = 18) => {
         if (typeof value !== 'string') return '';
         return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
-    };
-
-    const getClusterMemberCount = (cluster) => {
-        const explicit = toFiniteNumberOrNull(cluster?.member_count);
-        if (explicit !== null) return explicit;
-
-        const memberIds = Array.isArray(cluster?.member_micro_feature_ids)
-            ? cluster.member_micro_feature_ids
-            : [];
-
-        return memberIds.length;
     };
 
     const getClusterStepAnchorMicroFeatureId = (cluster) => {
@@ -430,6 +390,28 @@ const SidebarPanel = ({
         }
     };
 
+    const handleClusterToggleExpand = (event, cluster) => {
+        event?.stopPropagation?.();
+
+        const clusterId = toFiniteNumberOrNull(cluster?.id);
+        if (clusterId === null) return;
+
+        const children = getClusterChildren(cluster);
+        if (!children.length) return;
+
+        setSelectedClusterId(clusterId);
+        setExpandedClusterIds((previous) => (
+            previous.includes(clusterId)
+                ? previous.filter((id) => id !== clusterId)
+                : [...previous, clusterId]
+        ));
+
+        const targetMicroFeatureId = getClusterStepAnchorMicroFeatureId(cluster);
+        if (targetMicroFeatureId != null && onSelectMicroFeature) {
+            onSelectMicroFeature(targetMicroFeatureId);
+        }
+    };
+
     const handleMicroFeatureSelect = (microFeatureId) => {
         setSelectedClusterId(null);
         if (microFeatureId != null && onSelectMicroFeature) {
@@ -437,143 +419,56 @@ const SidebarPanel = ({
         }
     };
 
-    const clusterNameById = useMemo(() => {
-        const map = new Map();
-
-        orderedHierarchicalClusters.forEach((cluster, index) => {
-            const clusterId = toFiniteNumberOrNull(cluster?.id);
-            if (clusterId === null) return;
-            map.set(clusterId, getClusterLabel(cluster, index));
-        });
-
-        return map;
-    }, [orderedHierarchicalClusters]);
-
-    const resolvedDrillPath = useMemo(() => {
-        return clusterDrillPath.filter((clusterId) => clusterById.has(clusterId));
-    }, [clusterDrillPath, clusterById]);
+    const expandedClusterIdSet = useMemo(() => {
+        return new Set(
+            expandedClusterIds.filter((clusterId) => clusterById.has(clusterId))
+        );
+    }, [expandedClusterIds, clusterById]);
 
     useEffect(() => {
-        if (
-            resolvedDrillPath.length === clusterDrillPath.length &&
-            resolvedDrillPath.every((value, index) => value === clusterDrillPath[index])
-        ) {
-            return;
-        }
-
-        setClusterDrillPath(resolvedDrillPath);
-    }, [resolvedDrillPath, clusterDrillPath]);
-
-    const arePathsEqual = (firstPath, secondPath) => {
-        if (firstPath.length !== secondPath.length) return false;
-        return firstPath.every((value, index) => value === secondPath[index]);
-    };
-
-    const updateDrillPath = (nextPath) => {
-        if (arePathsEqual(nextPath, resolvedDrillPath)) return;
-        setClusterDrillPath(nextPath);
-    };
-
-    const currentDrillClusterId = resolvedDrillPath.length
-        ? resolvedDrillPath[resolvedDrillPath.length - 1]
-        : null;
-
-    const currentDrillCluster = currentDrillClusterId !== null
-        ? clusterById.get(currentDrillClusterId)
-        : null;
-
-    const visibleHierarchicalClusters = useMemo(() => {
-        if (!currentDrillCluster) return rootClusters;
-        return getClusterChildren(currentDrillCluster);
-    }, [currentDrillCluster, rootClusters, orderedHierarchicalClusters, clusterById, childrenByParentId]);
-
-    const drillBreadcrumbs = useMemo(() => {
-        const crumbs = [{ key: 'root', label: 'Root', path: [] }];
-
-        resolvedDrillPath.forEach((clusterId, index) => {
-            const label = clusterNameById.get(clusterId) || `Cluster ${index + 1}`;
-            crumbs.push({
-                key: `cluster_${clusterId}_${index}`,
-                label,
-                compactLabel: getCompactText(label, 20),
-                path: resolvedDrillPath.slice(0, index + 1),
-            });
+        setExpandedClusterIds((previous) => {
+            const next = previous.filter((clusterId) => clusterById.has(clusterId));
+            if (next.length === previous.length) return previous;
+            return next;
         });
+    }, [clusterById]);
 
-        return crumbs;
-    }, [resolvedDrillPath, clusterNameById]);
-
-    const handleDrillBreadcrumb = (targetPath) => {
-        updateDrillPath(targetPath);
-    };
-
-    const handleClusterDrillDown = (event, cluster) => {
-        event?.stopPropagation?.();
-        handleClusterSelect(null, cluster);
-
-        const clusterId = toFiniteNumberOrNull(cluster?.id);
-        if (clusterId === null || resolvedDrillPath.includes(clusterId)) return;
-
-        const children = getClusterChildren(cluster);
-        if (!children.length) return;
-
-        updateDrillPath([...resolvedDrillPath, clusterId]);
-    };
-
-    const renderDrilldownLane = (clusters) => {
+    const renderDrilldownLane = (clusters, depth = 0) => {
         return clusters.map((cluster, index) => {
             const clusterId = toFiniteNumberOrNull(cluster?.id);
             const children = getClusterChildren(cluster);
             const hasChildren = children.length > 0;
             const isActive = clusterId !== null && activeClusterIds.has(clusterId);
-            const clusterName = clusterId !== null
-                ? clusterNameById.get(clusterId) || getClusterLabel(cluster, index)
-                : getClusterLabel(cluster, index);
-            const compactClusterName = getCompactText(clusterName, 17);
+            const isSelected = clusterId !== null && clusterId === toFiniteNumberOrNull(selectedClusterId);
+            const isExpanded = clusterId !== null && expandedClusterIdSet.has(clusterId);
+            const clusterName = getClusterLabel(cluster, index);
+            const compactClusterName = getCompactText(clusterName, 46);
 
             return (
-                <React.Fragment key={`token_${clusterId ?? `lane_${index}`}`}>
+                <div key={`token_${clusterId ?? `lane_${depth}_${index}`}`} style={hierarchyVerticalNodeWrapperStyle(depth)}>
                     <button
                         type="button"
                         onClick={(event) => handleClusterSelect(event, cluster)}
-                        onDoubleClick={(event) => handleClusterDrillDown(event, cluster)}
-                        style={circleNodeStyle(isActive, hasChildren)}
-                        title={`${getClusterLabel(cluster, index)} | Steps ${formatClusterRange(cluster)}${hasChildren ? ' | Double-click to drill down' : ''}`}
+                        onDoubleClick={(event) => handleClusterToggleExpand(event, cluster)}
+                        style={hierarchyVerticalNodeStyle(isActive, isSelected, hasChildren)}
+                        title={`${clusterName}${hasChildren ? ' | Double-click to expand/collapse' : ''}`}
                     >
-                        <span style={circleNodeLabelStyle(isActive, hasChildren)}>{compactClusterName}</span>
+                        <span style={hierarchyVerticalNodeArrowStyle(hasChildren, isExpanded)}>
+                            {hasChildren ? (isExpanded ? 'v' : '>') : '-'}
+                        </span>
+                        <span style={hierarchyVerticalNodeLabelStyle(isActive)}>{compactClusterName}</span>
                         {hasChildren && <span style={circleNodeDrillMarkerStyle} />}
                     </button>
-                    {index < clusters.length - 1 && <span style={microFeatureRailArrowStyle}>→</span>}
-                </React.Fragment>
+
+                    {hasChildren && isExpanded && (
+                        <div style={hierarchyVerticalChildrenStyle}>
+                            {renderDrilldownLane(children, depth + 1)}
+                        </div>
+                    )}
+                </div>
             );
         });
     };
-
-    const focusedCluster = useMemo(() => {
-        const selected = clusterById.get(toFiniteNumberOrNull(selectedClusterId));
-        if (selected) return selected;
-
-        if (currentDrillCluster) return currentDrillCluster;
-
-        if (activeClusterIds.size > 0) {
-            const active = orderedHierarchicalClusters
-                .filter((cluster) => activeClusterIds.has(toFiniteNumberOrNull(cluster?.id)))
-                .sort((a, b) => {
-                    const levelA = toFiniteNumberOrNull(a?.hierarchy_level) ?? Number.POSITIVE_INFINITY;
-                    const levelB = toFiniteNumberOrNull(b?.hierarchy_level) ?? Number.POSITIVE_INFINITY;
-                    return levelA - levelB;
-                });
-
-            if (active.length > 0) return active[0];
-        }
-
-        return rootClusters[0] || null;
-    }, [clusterById, selectedClusterId, currentDrillCluster, activeClusterIds, orderedHierarchicalClusters, rootClusters]);
-
-    const focusedMicroFeatureIndex = useMemo(() => {
-        if (!focusedMicroFeature) return -1;
-        return microFeatures.findIndex((feature) => Number(feature?.id) === Number(focusedMicroFeature?.id));
-    }, [focusedMicroFeature, microFeatures]);
 
     const selectedClusterForMicroHighlight = useMemo(() => {
         return clusterById.get(toFiniteNumberOrNull(selectedClusterId)) || null;
@@ -593,70 +488,111 @@ const SidebarPanel = ({
         );
     }, [selectedClusterForMicroHighlight]);
 
-    const traceDetailsCard = useMemo(() => {
-        const selectedCluster = clusterById.get(toFiniteNumberOrNull(selectedClusterId));
+    const focusedMicroFeatureForDetails = useMemo(() => {
+        if (!microFeatures.length) return null;
 
-        if (selectedCluster) {
-            const selectedClusterChildren = getClusterChildren(selectedCluster);
-            if (selectedClusterChildren.length === 0) {
-                const leafMicroFeatureId = getClusterStepAnchorMicroFeatureId(selectedCluster);
-                const leafMicroFeature = microFeatureById.get(toFiniteNumberOrNull(leafMicroFeatureId));
+        const activeId = toFiniteNumberOrNull(activeMicroFeatureId);
+        if (activeId !== null) {
+            const activeMatch = microFeatureById.get(activeId);
+            if (activeMatch) return activeMatch;
+        }
+
+        return microFeatures[0];
+    }, [activeMicroFeatureId, microFeatureById, microFeatures]);
+
+    const flowDetailsCard = useMemo(() => {
+        if (selectedClusterForMicroHighlight) {
+            const selectedClusterChildren = getClusterChildren(selectedClusterForMicroHighlight);
+            const isLeafCluster = selectedClusterChildren.length === 0;
+
+            if (isLeafCluster) {
+                const anchorMicroFeatureId = toFiniteNumberOrNull(
+                    getClusterStepAnchorMicroFeatureId(selectedClusterForMicroHighlight)
+                );
+
+                let leafMicroFeature = anchorMicroFeatureId !== null
+                    ? microFeatureById.get(anchorMicroFeatureId) || null
+                    : null;
+
+                if (!leafMicroFeature) {
+                    const firstMemberId = (Array.isArray(selectedClusterForMicroHighlight?.member_micro_feature_ids)
+                        ? selectedClusterForMicroHighlight.member_micro_feature_ids
+                        : [])
+                        .map((memberId) => toFiniteNumberOrNull(memberId))
+                        .find((memberId) => memberId !== null);
+
+                    if (firstMemberId !== undefined) {
+                        leafMicroFeature = microFeatureById.get(firstMemberId) || null;
+                    }
+                }
 
                 if (leafMicroFeature) {
-                    const index = microFeatures.findIndex(
+                    const selectedIndex = microFeatures.findIndex(
                         (feature) => Number(feature?.id) === Number(leafMicroFeature?.id)
                     );
 
                     return {
                         kind: 'Micro-Feature',
-                        title: getMicroFeatureLabel(leafMicroFeature, index >= 0 ? index : 0),
+                        title: getMicroFeatureLabel(
+                            leafMicroFeature,
+                            selectedIndex >= 0 ? selectedIndex : 0
+                        ),
                         rangeLabel: `Steps ${getMicroFeatureRange(leafMicroFeature)}`,
-                        countLabel: `${getMicroFeatureStepCount(leafMicroFeature)} ops`,
-                        description: leafMicroFeature?.description || 'No summary available for this micro-feature.',
+                        countLabel: `${selectedIndex >= 0 ? selectedIndex + 1 : 1}/${Math.max(microFeatures.length, 1)}`,
+                        description:
+                            leafMicroFeature?.description ||
+                            'No summary available for this micro-feature.',
                     };
                 }
             }
 
+            const { start, end } = getClusterRange(selectedClusterForMicroHighlight);
+            const rangeLabel =
+                start !== null && end !== null
+                    ? `${start}-${end}`
+                    : start !== null
+                        ? `${start}+`
+                        : 'n/a';
+
+            const memberCount = (Array.isArray(selectedClusterForMicroHighlight?.member_micro_feature_ids)
+                ? selectedClusterForMicroHighlight.member_micro_feature_ids
+                : []
+            )
+                .map((memberId) => toFiniteNumberOrNull(memberId))
+                .filter((memberId) => memberId !== null).length;
+
             return {
                 kind: 'Cluster',
-                title: selectedCluster?.name || 'Cluster',
-                rangeLabel: `Steps ${formatClusterRange(selectedCluster)}`,
-                countLabel: `${getClusterMemberCount(selectedCluster)} segments`,
-                description: selectedCluster?.description || 'No summary available for this cluster.',
+                title: String(selectedClusterForMicroHighlight?.name || 'Cluster'),
+                rangeLabel: `Steps ${rangeLabel}`,
+                countLabel: `${memberCount} segments`,
+                description:
+                    selectedClusterForMicroHighlight?.description ||
+                    'No summary available for this cluster.',
             };
         }
 
-        if (focusedMicroFeature) {
-            const index = focusedMicroFeatureIndex >= 0 ? focusedMicroFeatureIndex : 0;
-            return {
-                kind: 'Micro-Feature',
-                title: getMicroFeatureLabel(focusedMicroFeature, index),
-                rangeLabel: `Steps ${getMicroFeatureRange(focusedMicroFeature)}`,
-                countLabel: `${getMicroFeatureStepCount(focusedMicroFeature)} ops`,
-                description: focusedMicroFeature?.description || 'No summary available for this micro-feature.',
-            };
-        }
+        if (!focusedMicroFeatureForDetails) return null;
 
-        if (focusedCluster) {
-            return {
-                kind: 'Cluster',
-                title: focusedCluster?.name || 'Cluster',
-                rangeLabel: `Steps ${formatClusterRange(focusedCluster)}`,
-                countLabel: `${getClusterMemberCount(focusedCluster)} segments`,
-                description: focusedCluster?.description || 'No summary available for this cluster.',
-            };
-        }
+        const selectedIndex = microFeatures.findIndex(
+            (feature) => Number(feature?.id) === Number(focusedMicroFeatureForDetails?.id)
+        );
 
-        return null;
-    }, [
-        clusterById,
-        selectedClusterId,
-        focusedMicroFeature,
-        focusedMicroFeatureIndex,
-        focusedCluster,
-        microFeatureById,
-        microFeatures,
-    ]);
+        return {
+            kind: 'Micro-Feature',
+            title: getMicroFeatureLabel(
+                focusedMicroFeatureForDetails,
+                selectedIndex >= 0 ? selectedIndex : 0
+            ),
+            rangeLabel: `Steps ${getMicroFeatureRange(focusedMicroFeatureForDetails)}`,
+            countLabel: `${selectedIndex >= 0 ? selectedIndex + 1 : 1}/${Math.max(microFeatures.length, 1)}`,
+            description:
+                focusedMicroFeatureForDetails?.description ||
+                'No summary available for this micro-feature.',
+        };
+    }, [selectedClusterForMicroHighlight, focusedMicroFeatureForDetails, microFeatures, microFeatureById]);
+
+    const hierarchyEntryClusters = rootClusters.length > 0 ? rootClusters : orderedHierarchicalClusters;
 
     return (
         <div ref={sidebarRef} style={sidebarContainerStyle(isOpen, sidebarWidth, isResizing)}>
@@ -816,7 +752,7 @@ const SidebarPanel = ({
                                         <div style={microFeatureSectionStyle}>
                                             <div style={microFeatureHeaderStyle}>
                                                 <span>TRACE FLOWS</span>
-                                                <span>{`${visibleHierarchicalClusters.length} clusters | ${microFeatures.length} segments`}</span>
+                                                <span>{`${orderedHierarchicalClusters.length} clusters | ${microFeatures.length} segments`}</span>
                                             </div>
 
                                             {isMicroFeatureFlowLoading ? (
@@ -828,37 +764,15 @@ const SidebarPanel = ({
                                                     <div style={flowLaneSectionStyle}>
                                                         <div style={flowLaneHeaderStyle}>
                                                             <span>Hierarchical Flow</span>
-                                                            <span>{`${visibleHierarchicalClusters.length} nodes`}</span>
-                                                        </div>
-
-                                                        <div style={hierarchyBreadcrumbStyle}>
-                                                            {drillBreadcrumbs.map((crumb, index) => {
-                                                                const isCurrent = index === drillBreadcrumbs.length - 1;
-                                                                return (
-                                                                    <React.Fragment key={crumb.key}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleDrillBreadcrumb(crumb.path)}
-                                                                            style={hierarchyBreadcrumbButtonStyle(isCurrent)}
-                                                                            title={crumb.label}
-                                                                            disabled={isCurrent}
-                                                                        >
-                                                                            {crumb.compactLabel || crumb.label}
-                                                                        </button>
-                                                                        {index < drillBreadcrumbs.length - 1 && (
-                                                                            <span style={hierarchyBreadcrumbSeparatorStyle}>/</span>
-                                                                        )}
-                                                                    </React.Fragment>
-                                                                );
-                                                            })}
+                                                            <span>{`${orderedHierarchicalClusters.length} nodes`}</span>
                                                         </div>
 
                                                         <div style={hierarchicalInlineRailStyle}>
                                                             {orderedHierarchicalClusters.length === 0
                                                                 ? <span style={microFeatureEmptyStateStyle}>No hierarchical clusters available for this trace.</span>
-                                                                : visibleHierarchicalClusters.length > 0
-                                                                    ? renderDrilldownLane(visibleHierarchicalClusters)
-                                                                    : <span style={microFeatureEmptyStateStyle}>No child clusters at this level.</span>}
+                                                                : hierarchyEntryClusters.length > 0
+                                                                    ? renderDrilldownLane(hierarchyEntryClusters)
+                                                                    : <span style={microFeatureEmptyStateStyle}>No root clusters available for this trace.</span>}
                                                         </div>
                                                     </div>
 
@@ -895,27 +809,26 @@ const SidebarPanel = ({
                                                                     })}
                                                                 </div>
 
+                                                                {flowDetailsCard && (
+                                                                    <div style={microFeatureFlowDetailsCardStyle}>
+                                                                        <div style={microFeatureFlowMetaStyle}>
+                                                                            <span style={microFeatureFlowTypeBadgeStyle}>{flowDetailsCard.kind}</span>
+                                                                            <span style={microFeatureFlowRangeBadgeStyle}>{flowDetailsCard.rangeLabel}</span>
+                                                                            <span style={microFeatureFlowCountBadgeStyle}>{flowDetailsCard.countLabel}</span>
+                                                                        </div>
+                                                                        <div style={microFeatureFlowTitleStyle}>
+                                                                            {flowDetailsCard.title}
+                                                                        </div>
+                                                                        <div style={microFeatureFlowDescriptionStyle}>
+                                                                            {flowDetailsCard.description}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
                                                             </>
                                                         )}
                                                     </div>
 
-                                                    {traceDetailsCard && (
-                                                        <div style={microFeatureDetailsCardStyle}>
-                                                            <div style={microFeatureMetaStyle}>
-                                                                <span style={flowDetailTypeBadgeStyle}>{traceDetailsCard.kind}</span>
-                                                            </div>
-                                                            <div style={microFeatureDetailsTitleStyle}>
-                                                                {traceDetailsCard.title}
-                                                            </div>
-                                                            <div style={microFeatureMetaStyle}>
-                                                                <span style={microFeatureRangeBadgeStyle}>{traceDetailsCard.rangeLabel}</span>
-                                                                <span style={microFeatureCountBadgeStyle}>{traceDetailsCard.countLabel}</span>
-                                                            </div>
-                                                            <div style={microFeatureSummaryStyle}>
-                                                                {traceDetailsCard.description}
-                                                            </div>
-                                                        </div>
-                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -1293,6 +1206,68 @@ const microFeatureRailStyle = {
     padding: '2px 0 4px 0',
 };
 
+const microFeatureFlowDetailsCardStyle = {
+    marginTop: '6px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    background: 'rgba(255,255,255,0.03)',
+    padding: '8px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+};
+
+const microFeatureFlowMetaStyle = {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+};
+
+const microFeatureFlowTypeBadgeStyle = {
+    fontSize: '10px',
+    color: '#bfdbfe',
+    background: 'rgba(59,130,246,0.20)',
+    border: '1px solid rgba(96,165,250,0.35)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    fontFamily: 'monospace',
+};
+
+const microFeatureFlowRangeBadgeStyle = {
+    fontSize: '10px',
+    color: THEME.textMuted,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    fontFamily: 'monospace',
+};
+
+const microFeatureFlowCountBadgeStyle = {
+    fontSize: '10px',
+    color: THEME.textMuted,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '1px 7px',
+    fontFamily: 'monospace',
+};
+
+const microFeatureFlowTitleStyle = {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: THEME.textMain,
+    lineHeight: '1.35',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+};
+
+const microFeatureFlowDescriptionStyle = {
+    fontSize: '11px',
+    color: '#c9d0da',
+    lineHeight: '1.45',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+};
+
 const microFeatureChipStyle = (isActive, isClusterLinked = false) => ({
     width: '24px',
     height: '24px',
@@ -1340,83 +1315,78 @@ const microFeatureRailArrowStyle = {
 
 const hierarchicalInlineRailStyle = {
     display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'nowrap',
-    gap: '6px',
-    overflowX: 'auto',
-    overflowY: 'hidden',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: '10px',
+    overflowX: 'hidden',
+    overflowY: 'auto',
     padding: '8px',
     borderRadius: '9px',
     border: '1px solid rgba(255,255,255,0.09)',
     background: 'radial-gradient(circle at 20% 0%, rgba(56,189,248,0.10) 0%, rgba(255,255,255,0.02) 55%)',
+    maxHeight: '310px',
 };
 
-const hierarchyBreadcrumbStyle = {
+const hierarchyVerticalNodeWrapperStyle = (depth = 0) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    marginLeft: depth > 0 ? '12px' : '0',
+});
+
+const hierarchyVerticalChildrenStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    borderLeft: '1px dashed rgba(148,163,184,0.35)',
+    marginLeft: '8px',
+    paddingLeft: '8px',
+};
+
+const hierarchyVerticalNodeStyle = (isActive, isSelected, hasChildren) => ({
+    width: '100%',
+    border: '1px solid',
+    borderColor: isSelected
+        ? 'rgba(96,165,250,0.75)'
+        : isActive
+        ? `${THEME.success}88`
+        : hasChildren
+            ? 'rgba(96,165,250,0.42)'
+            : 'rgba(148,163,184,0.30)',
+    background: isSelected
+        ? 'linear-gradient(180deg, rgba(59, 130, 246, 0.30) 0%, rgba(30, 41, 59, 0.40) 100%)'
+        : isActive
+        ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.28) 0%, rgba(6, 95, 70, 0.30) 100%)'
+        : hasChildren
+            ? 'linear-gradient(180deg, rgba(30, 58, 138, 0.22) 0%, rgba(30, 41, 59, 0.34) 100%)'
+            : 'rgba(51, 65, 85, 0.30)',
+    color: THEME.textMain,
+    borderRadius: '8px',
+    minHeight: '34px',
+    padding: '6px 10px',
+    cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    gap: '5px',
-    overflowX: 'auto',
-    padding: '2px 0',
-};
-
-const hierarchyBreadcrumbButtonStyle = (isCurrent) => ({
-    border: 'none',
-    background: isCurrent ? 'rgba(59,130,246,0.20)' : 'transparent',
-    color: isCurrent ? '#dbeafe' : '#93c5fd',
-    borderRadius: '6px',
-    padding: '2px 6px',
-    fontSize: '10px',
-    fontWeight: isCurrent ? 700 : 600,
-    cursor: isCurrent ? 'default' : 'pointer',
-    maxWidth: '120px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-});
-
-const hierarchyBreadcrumbSeparatorStyle = {
-    color: '#64748b',
-    fontSize: '10px',
-    userSelect: 'none',
-};
-
-const circleNodeStyle = (isActive, hasChildren) => ({
-    border: '1px solid',
-    borderColor: isActive ? `${THEME.success}88` : hasChildren ? 'rgba(96,165,250,0.54)' : 'rgba(148,163,184,0.30)',
-    background: isActive
-        ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.30) 0%, rgba(6, 95, 70, 0.34) 100%)'
-        : hasChildren
-            ? 'linear-gradient(180deg, rgba(30, 58, 138, 0.36) 0%, rgba(30, 41, 59, 0.42) 100%)'
-            : 'rgba(51, 65, 85, 0.30)',
-    color: isActive ? THEME.success : THEME.textMuted,
-    borderRadius: '999px',
-    borderStyle: hasChildren ? 'solid' : 'dashed',
-    minHeight: '28px',
-    minWidth: '54px',
-    padding: '0 12px',
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '5px',
+    gap: '8px',
     position: 'relative',
-    boxShadow: isActive
-        ? `0 0 10px ${THEME.success}45`
-        : hasChildren
-            ? 'inset 0 0 0 1px rgba(96,165,250,0.16)'
-            : 'none',
-    transition: 'all 0.2s ease',
+    textAlign: 'left',
 });
 
-const circleNodeLabelStyle = (isActive, hasChildren) => ({
+const hierarchyVerticalNodeArrowStyle = (hasChildren, isExpanded) => ({
     fontFamily: 'monospace',
+    fontSize: '12px',
     fontWeight: 700,
+    color: hasChildren ? (isExpanded ? '#bfdbfe' : '#94a3b8') : '#64748b',
+    flexShrink: 0,
+});
+
+const hierarchyVerticalNodeLabelStyle = (isActive) => ({
     fontSize: '11px',
-    color: isActive ? '#ccfbf1' : hasChildren ? '#dbeafe' : '#cbd5e1',
-    maxWidth: '130px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    fontWeight: 700,
+    color: isActive ? '#ccfbf1' : '#e2e8f0',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    lineHeight: '1.35',
 });
 
 const circleNodeDrillMarkerStyle = {
@@ -1428,68 +1398,6 @@ const circleNodeDrillMarkerStyle = {
     borderRadius: '999px',
     background: '#93c5fd',
     boxShadow: '0 0 5px rgba(147,197,253,0.7)',
-};
-
-const microFeatureDetailsCardStyle = {
-    marginTop: '6px',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    background: 'rgba(255,255,255,0.03)',
-    padding: '8px 10px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-};
-
-const microFeatureDetailsTitleStyle = {
-    fontSize: '12px',
-    fontWeight: 700,
-    color: THEME.textMain,
-    lineHeight: '1.35',
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-};
-
-const microFeatureSummaryStyle = {
-    fontSize: '11px',
-    color: '#c9d0da',
-    lineHeight: '1.45',
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-};
-
-const microFeatureMetaStyle = {
-    display: 'flex',
-    gap: '6px',
-    flexWrap: 'wrap',
-};
-
-const microFeatureRangeBadgeStyle = {
-    fontSize: '10px',
-    color: THEME.textMuted,
-    background: 'rgba(255,255,255,0.06)',
-    borderRadius: '10px',
-    padding: '1px 7px',
-    fontFamily: 'monospace',
-};
-
-const microFeatureCountBadgeStyle = {
-    fontSize: '10px',
-    color: THEME.textMuted,
-    background: 'rgba(255,255,255,0.06)',
-    borderRadius: '10px',
-    padding: '1px 7px',
-    fontFamily: 'monospace',
-};
-
-const flowDetailTypeBadgeStyle = {
-    fontSize: '10px',
-    color: '#bfdbfe',
-    background: 'rgba(59,130,246,0.20)',
-    border: '1px solid rgba(96,165,250,0.35)',
-    borderRadius: '10px',
-    padding: '1px 7px',
-    fontFamily: 'monospace',
 };
 
 const traceListStyle = {
