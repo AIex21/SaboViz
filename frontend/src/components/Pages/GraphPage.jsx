@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import SaboGraph from "../Graph/SaboGraph";
 import TracePlayer from "../Player/TracePlayer";
@@ -95,6 +95,7 @@ function GraphPage() {
   const [traceExecutionFlowMap, setTraceExecutionFlowMap] = useState({});
   const [selectedTraceId, setSelectedTraceId] = useState("");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [traceDockLayout, setTraceDockLayout] = useState({ side: null, reservedHeight: 0 });
   const [showVisibleTraceOnly, setShowVisibleTraceOnly] = useState(false);
   const [visibleTraceSteps, setVisibleTraceSteps] = useState([]);
   const [isVisibleTraceFilterLoading, setIsVisibleTraceFilterLoading] = useState(false);
@@ -150,6 +151,7 @@ function GraphPage() {
         setActiveFeatureIds(new Set());
         setSelectedTraceId("");
         setCurrentStepIndex(0);
+        setTraceDockLayout({ side: null, reservedHeight: 0 });
         setShowVisibleTraceOnly(false);
         setVisibleTraceSteps([]);
         setIsVisibleTraceFilterLoading(false);
@@ -1580,6 +1582,24 @@ function GraphPage() {
     }
   };
 
+  const handleTraceDockLayoutChange = useCallback((dockLayout) => {
+    const nextSide = dockLayout?.side === "left" || dockLayout?.side === "right"
+      ? dockLayout.side
+      : null;
+    const nextHeight = Math.max(0, Number(dockLayout?.reservedHeight) || 0);
+
+    setTraceDockLayout((prev) => {
+      if (prev.side === nextSide && prev.reservedHeight === nextHeight) {
+        return prev;
+      }
+
+      return {
+        side: nextSide,
+        reservedHeight: nextHeight,
+      };
+    });
+  }, []);
+
   return (
     <div style={styles.container}>
       
@@ -1667,6 +1687,8 @@ function GraphPage() {
           onSummarizeNode={handleSummarizeNode}
           onRevealAggregatedMember={handleRevealAggregatedMember}
           onRevealAggregatedMemberDependencies={handleRevealAggregatedMemberDependencies}
+          traceDockSide={traceDockLayout.side}
+          traceDockReservedHeight={traceDockLayout.reservedHeight}
         />
       </div>
 
@@ -1682,6 +1704,7 @@ function GraphPage() {
         showVisibleOnly={showVisibleTraceOnly}
         onToggleVisibleOnly={() => setShowVisibleTraceOnly((prev) => !prev)}
         isVisibleFilterLoading={isVisibleTraceFilterLoading}
+        onDockLayoutChange={handleTraceDockLayoutChange}
       />
     </div>
   );

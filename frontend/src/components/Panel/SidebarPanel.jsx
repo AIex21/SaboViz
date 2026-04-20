@@ -41,7 +41,8 @@ const SidebarPanel = ({
     onStepChange,
     failureIndices = [],
     isMicroFeatureFlowLoading = false,
-    isDecomposing = false 
+    isDecomposing = false,
+    bottomInset = 20,
 }) => {
     const [activeTab, setActiveTab] = useState('structural');
     const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
@@ -734,7 +735,11 @@ const SidebarPanel = ({
     const hierarchyEntryClusters = rootClusters.length > 0 ? rootClusters : orderedHierarchicalClusters;
 
     return (
-        <div ref={sidebarRef} style={sidebarContainerStyle(isOpen, sidebarWidth, isResizing)}>
+        <div
+            ref={sidebarRef}
+            data-overlay-panel="sidebar"
+            style={sidebarContainerStyle(isOpen, sidebarWidth, isResizing, bottomInset)}
+        >
             {/* PANEL HEADER */}
             <div style={headerStyle(isOpen)}>
                 {isOpen && (
@@ -1044,9 +1049,9 @@ const SidebarPanel = ({
 
 // --- STATES & CONTAINER ---
 
-const sidebarContainerStyle = (isOpen, width, isResizing) => ({
+const sidebarContainerStyle = (isOpen, width, isResizing, bottomInset) => ({
     width: isOpen ? `${width}px` : `${SIDEBAR_COLLAPSED_WIDTH}px`, 
-    position: 'absolute', top: '20px', left: '20px', bottom: '20px',
+    position: 'absolute', top: '20px', left: '20px', bottom: `${Math.max(20, Number(bottomInset) || 20)}px`,
     // #121212 converted to rgba so the blur effect still works!
     backgroundColor: 'rgba(18, 18, 18, 0.95)', 
     backdropFilter: 'blur(20px)',

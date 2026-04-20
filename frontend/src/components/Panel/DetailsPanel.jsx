@@ -17,7 +17,7 @@ const CODE_KEYS = new Set([
 
 const STATUS_KEYS = new Set(['Message', 'message', 'status', 'error']);
 
-const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [], onSummarizeNode, onRevealAggregatedMember, onRevealAggregatedMemberDependencies, isProjectSummarizing = false }) => {
+const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, onToggleEdgeFocus, edgeFocusNodeIds, activeTraceAction, features = [], onSummarizeNode, onRevealAggregatedMember, onRevealAggregatedMemberDependencies, isProjectSummarizing = false, bottomInset = 20 }) => {
     const [isSummarizingNode, setIsSummarizingNode] = useState(false);
     
     if (!selectedElement) return null;
@@ -147,7 +147,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
     };
 
     return (
-        <div style={styles.panel}>
+        <div data-overlay-panel="details" style={styles.panel(bottomInset)}>
             {/* HEADER */}
             <div style={{...styles.header, background: headerColor}}>
                 <div style={{flex: 1, overflow: 'hidden'}}>
@@ -361,14 +361,14 @@ const formatKey = (key) => key ? key.replace(/([A-Z])/g, ' $1').replace(/^./, st
 
 // --- STYLES ---
 const styles = {
-    panel: {
-        position: 'absolute', top: 20, right: 20, bottom: 20, width: '320px',
+    panel: (bottomInset) => ({
+        position: 'absolute', top: 20, right: 20, bottom: Math.max(20, Number(bottomInset) || 20), width: '320px',
         backgroundColor: 'rgba(30, 30, 30, 0.95)', backdropFilter: 'blur(16px)',
         border: `1px solid ${THEME.border}`, borderRadius: '12px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 1000,
         display: 'flex', flexDirection: 'column', color: THEME.textMain,
         animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-    },
+    }),
     header: {
         padding: '16px', borderBottom: `1px solid ${THEME.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'start',

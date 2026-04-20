@@ -9,6 +9,8 @@ import { THEME, layoutOptions, saboStylesheet } from '../../config/graphConfig';
 cytoscape.use(fcose);
 
 const GHOST_EDGE_ID = 'trace-ghost-edge';
+const PANEL_BASE_INSET = 20;
+const PANEL_DOCK_GAP = 12;
 
 const SaboGraph = ({ 
     data, 
@@ -43,7 +45,9 @@ const SaboGraph = ({
     isProjectSummarizing,
     onSummarizeNode,
     onRevealAggregatedMember,
-    onRevealAggregatedMemberDependencies
+    onRevealAggregatedMemberDependencies,
+    traceDockSide = null,
+    traceDockReservedHeight = 0,
 }) => {
     const [selectedElement, setSelectedElement] = useState(null);
     const [cyInstance, setCyInstance] = useState(null);
@@ -62,6 +66,14 @@ const SaboGraph = ({
     const toggleEdge = (type) => {
         setEdgeVisibility(prev => ({...prev, [type]: !prev[type]}));
     };
+
+    const dockReserve = Math.max(0, Number(traceDockReservedHeight) || 0);
+    const sidebarBottomInset = traceDockSide === 'left'
+        ? PANEL_BASE_INSET + dockReserve + PANEL_DOCK_GAP
+        : PANEL_BASE_INSET;
+    const detailsBottomInset = traceDockSide === 'right'
+        ? PANEL_BASE_INSET + dockReserve + PANEL_DOCK_GAP
+        : PANEL_BASE_INSET;
 
     const exportNodePositions = () => {
         if (!cyInstance) return {};
@@ -645,6 +657,7 @@ const SaboGraph = ({
             <SidebarPanel 
                 isOpen={isSidebarOpen}
                 setIsOpen={setIsSidebarOpen}
+                bottomInset={sidebarBottomInset}
                 edgeVisibility={edgeVisibility}
                 toggleEdge={toggleEdge}
                 features={features}
@@ -676,6 +689,7 @@ const SaboGraph = ({
             <DetailsPanel
                 selectedElement={selectedElement}
                 onClose={() => setSelectedElement(null)}
+                bottomInset={detailsBottomInset}
                 onToggleLock={onToggleLock}
                 lockedNodeIds={lockedNodeIds}
                 onToggleEdgeFocus={onToggleEdgeFocus}
