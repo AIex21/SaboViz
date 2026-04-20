@@ -100,6 +100,7 @@ function GraphPage() {
   const [isVisibleTraceFilterLoading, setIsVisibleTraceFilterLoading] = useState(false);
   const [isTraceFlowLoading, setIsTraceFlowLoading] = useState(false);
   const [hierarchyMap, setHierarchyMap] = useState({});
+  const [activeTraceFlowHighlight, setActiveTraceFlowHighlight] = useState({ mode: null, targetId: null });
   const isFetchingHierarchy = useRef(false);
   const visibleTraceFilterRequestRef = useRef(0);
   const nodePositionsRef = useRef({});
@@ -155,6 +156,7 @@ function GraphPage() {
         setTraceDataMap({});
         setTraceExecutionFlowMap({});
         setIsTraceFlowLoading(false);
+        setActiveTraceFlowHighlight({ mode: null, targetId: null });
         nodePositionsRef.current = {};
       } catch (error) {
         console.error("Error loading graph data:", error);
@@ -201,11 +203,13 @@ function GraphPage() {
       setSelectedTraceId("");
       setCurrentStepIndex(0);
       setVisibleTraceSteps([]);
+      setActiveTraceFlowHighlight({ mode: null, targetId: null });
       return;
     }
 
     setSelectedTraceId(traceId);
     setCurrentStepIndex(0);
+    setActiveTraceFlowHighlight({ mode: null, targetId: null });
 
     const cachedExecutionFlow = traceExecutionFlowMap[traceId];
     const hasHierarchicalClusters = Array.isArray(cachedExecutionFlow?.hierarchical_clusters);
@@ -277,6 +281,88 @@ function GraphPage() {
   const traceHierarchicalClusters = useMemo(() => {
     return currentTraceExecutionFlow?.hierarchical_clusters || [];
   }, [currentTraceExecutionFlow]);
+
+  const microFeatureComponentsById = useMemo(() => {
+    const map = new Map();
+
+    traceMicroFeatures.forEach((microFeature) => {
+      const microId = Number(microFeature?.id);
+      if (!Number.isFinite(microId)) return;
+
+      const componentSet = new Set();
+      const components = Array.isArray(microFeature?.components) ? microFeature.components : [];
+
+      components.forEach((componentId) => {
+        if (componentId == null || componentId === "") return;
+        componentSet.add(String(componentId));
+      });
+
+      map.set(microId, componentSet);
+    });
+
+    return map;
+  }, [traceMicroFeatures]);
+
+  const clusterComponentsById = useMemo(() => {
+    const map = new Map();
+
+    traceHierarchicalClusters.forEach((cluster) => {
+      const clusterId = Number(cluster?.id);
+      if (!Number.isFinite(clusterId)) return;
+
+      const memberIds = Array.isArray(cluster?.member_micro_feature_ids)
+        ? cluster.member_micro_feature_ids
+        : [];
+      const componentSet = new Set();
+
+      memberIds.forEach((memberId) => {
+        const memberComponentSet = microFeatureComponentsById.get(Number(memberId));
+        if (!memberComponentSet) return;
+        memberComponentSet.forEach((componentId) => componentSet.add(componentId));
+      });
+
+      map.set(clusterId, componentSet);
+    });
+
+    return map;
+  }, [traceHierarchicalClusters, microFeatureComponentsById]);
+
+  const activeTraceComponentIds = useMemo(() => {
+    const targetMode = activeTraceFlowHighlight?.mode;
+    const targetId = Number(activeTraceFlowHighlight?.targetId);
+
+    if (!targetMode || !Number.isFinite(targetId)) return [];
+
+    const sourceMap = targetMode === "cluster"
+      ? clusterComponentsById
+      : microFeatureComponentsById;
+
+    const componentSet = sourceMap.get(targetId);
+    if (!componentSet || componentSet.size === 0) return [];
+
+    return Array.from(componentSet).sort();
+  }, [activeTraceFlowHighlight, clusterComponentsById, microFeatureComponentsById]);
+
+  const handleToggleTraceFlowHighlight = ({ mode, targetId }) => {
+    const normalizedMode = mode === "cluster" ? "cluster" : "micro";
+    const normalizedTargetId = Number(targetId);
+    if (!Number.isFinite(normalizedTargetId)) return;
+
+    setActiveTraceFlowHighlight((prev) => {
+      const prevId = Number(prev?.targetId);
+      const isSameTarget =
+        prev?.mode === normalizedMode && Number.isFinite(prevId) && prevId === normalizedTargetId;
+
+      if (isSameTarget) {
+        return { mode: null, targetId: null };
+      }
+
+      return {
+        mode: normalizedMode,
+        targetId: normalizedTargetId,
+      };
+    });
+  };
 
   const currentTraceStepNumber = useMemo(() => {
     if (!traceSteps.length) return null;
@@ -364,7 +450,38 @@ function GraphPage() {
       }
     };
     bufferHierarchy();
-  }, [currentStepIndex, traceSteps, hierarchyMap, projectId]);
+  }, [currentStepIndex, traceSteps, hierarchyMap, projectId, showToast]);
+
+  useEffect(() => {
+    if (!selectedTraceId || activeTraceComponentIds.length === 0) return;
+    if (isFetchingHierarchy.current) return;
+
+    const missingIds = activeTraceComponentIds.filter((nodeId) => !hierarchyMap[nodeId]);
+    if (missingIds.length === 0) return;
+
+    let isCancelled = false;
+
+    const bufferHighlightedHierarchy = async () => {
+      isFetchingHierarchy.current = true;
+      try {
+        const newHierarchy = await projectApi.getHierarchy(projectId, missingIds);
+        if (isCancelled) return;
+        setHierarchyMap((prev) => ({ ...prev, ...newHierarchy }));
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Trace-flow hierarchy buffer failed", error);
+        showToast("Failed to buffer trace-flow hierarchy", "error");
+      } finally {
+        isFetchingHierarchy.current = false;
+      }
+    };
+
+    bufferHighlightedHierarchy();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedTraceId, activeTraceComponentIds, hierarchyMap, projectId, showToast]);
 
   const formatNode = (node, fallbackPosition = null) => {
     const cachedPosition = nodePositionsRef.current[String(node.id)] || fallbackPosition;
@@ -959,24 +1076,57 @@ function GraphPage() {
           filteredEdges = mergeUniqueElements(filteredEdges, revealedDepEdges).filter((el) => Boolean(el?.data?.source));
         }
       }
-    } else if (activeFeatureIds.size > 0) {
+    } else if (activeFeatureIds.size > 0 || activeTraceComponentIds.length > 0) {
       const visibleNodeById = new Map(filteredNodes.map((n) => [String(n.data.id), n]));
-      const featureScope = new Set();
+      const traceScopeEnabled = activeTraceComponentIds.length > 0;
+      const traceResolvedVisibleIds = new Set();
+
+      const resolveTraceTargetToVisibleId = (targetId) => {
+        const targetIdStr = String(targetId);
+        if (visibleNodeById.has(targetIdStr)) return targetIdStr;
+
+        const ancestors = hierarchyMap?.[targetIdStr]?.ancestors;
+        if (Array.isArray(ancestors)) {
+          for (let i = 0; i < ancestors.length; i += 1) {
+            const ancestorId = String(ancestors[i]);
+            if (visibleNodeById.has(ancestorId)) {
+              return ancestorId;
+            }
+          }
+        }
+
+        return null;
+      };
+
+      if (traceScopeEnabled) {
+        activeTraceComponentIds.forEach((nodeId) => {
+          const resolvedId = resolveTraceTargetToVisibleId(nodeId);
+          if (resolvedId) traceResolvedVisibleIds.add(resolvedId);
+        });
+      }
+
+      const focusScope = new Set();
 
       filteredNodes.forEach((node) => {
         const nodeId = String(node.data.id);
-        const featureIds = Array.isArray(node?.data?.participating_features)
-          ? node.data.participating_features
-          : [];
+        let inScope = false;
 
-        const inActiveFeature = featureIds.some((fid) => activeFeatureIds.has(fid));
-        if (!inActiveFeature) return;
+        if (traceScopeEnabled) {
+          inScope = traceResolvedVisibleIds.has(nodeId);
+        } else {
+          const featureIds = Array.isArray(node?.data?.participating_features)
+            ? node.data.participating_features
+            : [];
+          inScope = featureIds.some((fid) => activeFeatureIds.has(fid));
+        }
 
-        featureScope.add(nodeId);
+        if (!inScope) return;
+
+        focusScope.add(nodeId);
 
         let parentId = node?.data?.parent != null ? String(node.data.parent) : null;
         while (parentId) {
-          featureScope.add(parentId);
+          focusScope.add(parentId);
           const parentNode = visibleNodeById.get(parentId);
           parentId = parentNode?.data?.parent != null ? String(parentNode.data.parent) : null;
         }
@@ -988,7 +1138,7 @@ function GraphPage() {
       filteredNodes.forEach((node) => {
         const nodeId = String(node.data.id);
         const keepAsRealNode =
-          featureScope.has(nodeId) ||
+          focusScope.has(nodeId) ||
           revealedAggregatedNodeIds.has(nodeId) ||
           (expandedNodeIds.has(nodeId) && Boolean(node?.data?.hasChildren));
 
@@ -1043,7 +1193,7 @@ function GraphPage() {
         const src = String(edge.data.source);
         const tgt = String(edge.data.target);
         if (!keptNodeIdSet.has(src) || !keptNodeIdSet.has(tgt)) return false;
-        return featureScope.has(src) || featureScope.has(tgt);
+        return focusScope.has(src) || focusScope.has(tgt);
       });
 
       filteredNodes = keptNodes;
@@ -1083,8 +1233,8 @@ function GraphPage() {
               const src = String(e.data.source);
               const tgt = String(e.data.target);
 
-              const memberToFeature = src === memberId && featureScope.has(tgt);
-              const featureToMember = tgt === memberId && featureScope.has(src);
+              const memberToFeature = src === memberId && focusScope.has(tgt);
+              const featureToMember = tgt === memberId && focusScope.has(src);
               if (!memberToFeature && !featureToMember) return;
 
               const featureNeighborId = memberToFeature ? tgt : src;
@@ -1166,7 +1316,7 @@ function GraphPage() {
               isAggregateNode: true,
               weight: bucketMembers.length,
               aggregateMembers: aggregateMembersInfo,
-              aggregateContextLabel: "feature scope",
+              aggregateContextLabel: traceScopeEnabled ? "trace flow scope" : "feature scope",
             },
             ...(aggregatePosition ? { position: aggregatePosition } : {}),
             classes: `AggregatedNode ${aggregateVisualClass}`,
@@ -1191,7 +1341,7 @@ function GraphPage() {
           const byNeighbor = entry?.lockedEdgesByNeighbor || {};
           Object.entries(byNeighbor).forEach(([neighborIdRaw, breakdownRaw]) => {
             const neighborId = String(neighborIdRaw);
-            if (!keptNodeIdSet.has(neighborId) || !featureScope.has(neighborId)) return;
+            if (!keptNodeIdSet.has(neighborId) || !focusScope.has(neighborId)) return;
 
             const breakdown =
               breakdownRaw && typeof breakdownRaw === "object" ? breakdownRaw : {};
@@ -1230,7 +1380,7 @@ function GraphPage() {
     }
 
     return sanitizeEdgesByPresentNodes([...filteredNodes, ...filteredEdges]);
-  }, [graphElements, expandedNodeIds, lockedNodeIds, revealedAggregatedNodeIds, shownAggregatedMemberDeps, edgeFocusNodeIds, activeFeatureIds]);
+  }, [graphElements, expandedNodeIds, lockedNodeIds, revealedAggregatedNodeIds, shownAggregatedMemberDeps, edgeFocusNodeIds, activeFeatureIds, activeTraceComponentIds, hierarchyMap]);
 
   const lockedScopeIds = useMemo(() => {
     if (lockedNodeIds.size === 0) return new Set();
@@ -1496,6 +1646,7 @@ function GraphPage() {
           edgeFocusNodeIds={edgeFocusNodeIds}
           edgeFocusNeighborIds={edgeFocusNeighborIds}
           hierarchyMap={hierarchyMap}
+          activeTraceComponentIds={activeTraceComponentIds}
           features={features}
           activeFeatureIds={activeFeatureIds}
           onFeatureToggle={handleFeatureToggle}
@@ -1505,6 +1656,8 @@ function GraphPage() {
           hierarchicalClusters={traceHierarchicalClusters}
           activeMicroFeatureId={activeMicroFeatureId}
           onSelectMicroFeature={handleSelectMicroFeature}
+          activeTraceFlowHighlight={activeTraceFlowHighlight}
+          onToggleTraceFlowHighlight={handleToggleTraceFlowHighlight}
           isMicroFeatureFlowLoading={isTraceFlowLoading}
           currentStep={currentStepIndex}
           onStepChange={setCurrentStepIndex}

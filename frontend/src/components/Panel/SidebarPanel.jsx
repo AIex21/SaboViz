@@ -35,6 +35,8 @@ const SidebarPanel = ({
     hierarchicalClusters = [],
     activeMicroFeatureId = null,
     onSelectMicroFeature,
+    activeTraceFlowHighlight = { mode: null, targetId: null },
+    onToggleTraceFlowHighlight,
     currentStep = 0,
     onStepChange,
     failureIndices = [],
@@ -592,6 +594,143 @@ const SidebarPanel = ({
         };
     }, [selectedClusterForMicroHighlight, focusedMicroFeatureForDetails, microFeatures, microFeatureById]);
 
+    const traceFlowHighlightTarget = useMemo(() => {
+        if (selectedClusterForMicroHighlight) {
+            const clusterId = toFiniteNumberOrNull(selectedClusterForMicroHighlight?.id);
+            if (clusterId !== null) {
+                const componentIds = new Set();
+
+                selectedClusterMicroFeatureIds.forEach((microId) => {
+                    const microFeature = microFeatureById.get(microId);
+                    const components = Array.isArray(microFeature?.components)
+                        ? microFeature.components
+                        : [];
+
+                    components.forEach((componentId) => {
+                        if (componentId == null || componentId === '') return;
+                        componentIds.add(String(componentId));
+                    });
+                });
+
+                return {
+                    mode: 'cluster',
+                    targetId: clusterId,
+                    label: 'Cluster',
+                    componentCount: componentIds.size,
+                };
+            }
+        }
+
+        const activeMicroId = toFiniteNumberOrNull(activeMicroFeatureId);
+        const focusedMicroId = toFiniteNumberOrNull(focusedMicroFeatureForDetails?.id);
+        const targetMicroId = activeMicroId ?? focusedMicroId;
+
+        if (targetMicroId === null) return null;
+
+        const componentIds = new Set();
+        const targetMicroFeature = microFeatureById.get(targetMicroId);
+        const components = Array.isArray(targetMicroFeature?.components)
+            ? targetMicroFeature.components
+            : [];
+
+        components.forEach((componentId) => {
+            if (componentId == null || componentId === '') return;
+            componentIds.add(String(componentId));
+        });
+
+        return {
+            mode: 'micro',
+            targetId: targetMicroId,
+            label: 'Micro-Feature',
+            componentCount: componentIds.size,
+        };
+    }, [
+        selectedClusterForMicroHighlight,
+        selectedClusterMicroFeatureIds,
+        microFeatureById,
+        activeMicroFeatureId,
+        focusedMicroFeatureForDetails,
+    ]);
+
+    const isTraceFlowHighlightActive = useMemo(() => {
+        if (!traceFlowHighlightTarget) return false;
+
+        const activeTargetId = toFiniteNumberOrNull(activeTraceFlowHighlight?.targetId);
+        return activeTraceFlowHighlight?.mode === traceFlowHighlightTarget.mode
+            && activeTargetId === traceFlowHighlightTarget.targetId;
+    }, [activeTraceFlowHighlight, traceFlowHighlightTarget]);
+
+    const canToggleTraceFlowHighlight = Boolean(
+        traceFlowHighlightTarget
+        && traceFlowHighlightTarget.componentCount > 0
+        && onToggleTraceFlowHighlight
+    );
+
+    const handleTraceFlowHighlightToggle = () => {
+        if (!canToggleTraceFlowHighlight || !traceFlowHighlightTarget) return;
+
+        onToggleTraceFlowHighlight({
+            mode: traceFlowHighlightTarget.mode,
+            targetId: traceFlowHighlightTarget.targetId,
+        });
+    };
+
+    const flowHighlightedMicroFeatureIds = useMemo(() => {
+        if (selectedClusterForMicroHighlight) {
+            return new Set(selectedClusterMicroFeatureIds);
+        }
+
+        const activeId = toFiniteNumberOrNull(activeMicroFeatureId);
+        if (activeId !== null) {
+            return new Set([activeId]);
+        }
+
+        const focusedId = toFiniteNumberOrNull(focusedMicroFeatureForDetails?.id);
+        return focusedId !== null ? new Set([focusedId]) : new Set();
+    }, [
+        selectedClusterForMicroHighlight,
+        selectedClusterMicroFeatureIds,
+        activeMicroFeatureId,
+        focusedMicroFeatureForDetails,
+    ]);
+
+    const highlightedTraceStepIndexSet = useMemo(() => {
+        const highlighted = new Set();
+        if (flowHighlightedMicroFeatureIds.size === 0 || traceSteps.length === 0) {
+            return highlighted;
+        }
+
+        const ranges = [];
+        flowHighlightedMicroFeatureIds.forEach((microId) => {
+            const microFeature = microFeatureById.get(microId);
+            if (!microFeature) return;
+
+            const start = toFiniteNumberOrNull(microFeature?.start_step);
+            const end = toFiniteNumberOrNull(microFeature?.end_step);
+
+            if (start === null) return;
+            ranges.push({ start, end });
+        });
+
+        if (ranges.length === 0) return highlighted;
+
+        traceSteps.forEach((step, index) => {
+            const stepNumber = toFiniteNumberOrNull(step?.data?.properties?.step);
+            if (stepNumber === null) return;
+
+            const inRange = ranges.some(({ start, end }) => {
+                if (end !== null) {
+                    return stepNumber >= start && stepNumber <= end;
+                }
+                return stepNumber >= start;
+            });
+
+            if (inRange) highlighted.add(index);
+        });
+
+        return highlighted;
+    }, [traceSteps, flowHighlightedMicroFeatureIds, microFeatureById]);
+
     const hierarchyEntryClusters = rootClusters.length > 0 ? rootClusters : orderedHierarchicalClusters;
 
     return (
@@ -822,6 +961,20 @@ const SidebarPanel = ({
                                                                         <div style={microFeatureFlowDescriptionStyle}>
                                                                             {flowDetailsCard.description}
                                                                         </div>
+                                                                        {traceFlowHighlightTarget && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={handleTraceFlowHighlightToggle}
+                                                                                disabled={!canToggleTraceFlowHighlight}
+                                                                                style={traceFlowHighlightButtonStyle(isTraceFlowHighlightActive, !canToggleTraceFlowHighlight)}
+                                                                            >
+                                                                                <span>
+                                                                                    {isTraceFlowHighlightActive
+                                                                                        ? 'Hide highlighted components'
+                                                                                        : `Highlight ${traceFlowHighlightTarget.label} Components`}
+                                                                                </span>
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 )}
 
@@ -837,6 +990,7 @@ const SidebarPanel = ({
                                             {nearbySteps.map(({ index, step }) => {
                                                 const isCurrent = index === currentStep;
                                                 const isFailure = failureSet.has(index);
+                                                const isFlowHighlighted = highlightedTraceStepIndexSet.has(index);
                                                 const actionKind = getActionKind(step);
                                                 const resolution = getResolutionStatus(step);
 
@@ -845,10 +999,10 @@ const SidebarPanel = ({
                                                         key={step?.data?.id || `trace_step_${index}`}
                                                         type="button"
                                                         onClick={() => onStepChange && onStepChange(index)}
-                                                        style={traceRowStyle(isCurrent, isFailure)}
+                                                        style={traceRowStyle(isCurrent, isFailure, isFlowHighlighted)}
                                                         title={`${getStepLabel(step, index)} | ${actionKind || 'action'} | ${resolution.label}`}
                                                     >
-                                                        <span style={traceIndexStyle(isCurrent, isFailure)}>{index + 1}</span>
+                                                        <span style={traceIndexStyle(isCurrent, isFailure, isFlowHighlighted)}>{index + 1}</span>
                                                         <div style={traceRowContentStyle}>
                                                             <span style={traceLabelStyle}>{getStepLabel(step, index)}</span>
                                                             <div style={traceMetaBadgesStyle}>
@@ -1268,6 +1422,24 @@ const microFeatureFlowDescriptionStyle = {
     wordBreak: 'break-word',
 };
 
+const traceFlowHighlightButtonStyle = (isActive, isDisabled) => ({
+    marginTop: '4px',
+    borderRadius: '7px',
+    border: `1px solid ${isActive ? 'rgba(34,197,94,0.75)' : 'rgba(255,255,255,0.16)'}`,
+    background: isActive ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.03)',
+    color: isActive ? '#bbf7d0' : THEME.textMain,
+    padding: '7px 9px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.15px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    opacity: isDisabled ? 0.55 : 1,
+});
+
 const microFeatureChipStyle = (isActive, isClusterLinked = false) => ({
     width: '24px',
     height: '24px',
@@ -1412,11 +1584,17 @@ const traceListStyle = {
     gap: '4px',
 };
 
-const traceRowStyle = (isCurrent, isFailure) => ({
+const traceRowStyle = (isCurrent, isFailure, isFlowHighlighted = false) => ({
     width: '100%',
-    border: '1px solid transparent',
+    border: `1px solid ${isFlowHighlighted && !isCurrent ? 'rgba(96, 165, 250, 0.35)' : 'transparent'}`,
     borderRadius: '6px',
-    background: isCurrent ? `${THEME.primary}26` : isFailure ? 'rgba(239, 68, 68, 0.14)' : 'transparent',
+    background: isCurrent
+        ? `${THEME.primary}26`
+        : isFailure
+            ? 'rgba(239, 68, 68, 0.14)'
+            : isFlowHighlighted
+                ? 'rgba(59, 130, 246, 0.10)'
+                : 'transparent',
     color: THEME.textMain,
     cursor: 'pointer',
     display: 'grid',
@@ -1426,13 +1604,20 @@ const traceRowStyle = (isCurrent, isFailure) => ({
     textAlign: 'left',
     padding: '6px 8px',
     outline: isCurrent ? `1px solid ${THEME.primary}` : 'none',
+    boxShadow: isFlowHighlighted && !isCurrent ? 'inset 0 0 0 1px rgba(59,130,246,0.10)' : 'none',
 });
 
-const traceIndexStyle = (isCurrent, isFailure) => ({
+const traceIndexStyle = (isCurrent, isFailure, isFlowHighlighted = false) => ({
     fontFamily: 'monospace',
     fontSize: '11px',
     fontWeight: 700,
-    color: isCurrent ? THEME.primary : isFailure ? THEME.danger : THEME.textMuted,
+    color: isCurrent
+        ? THEME.primary
+        : isFailure
+            ? THEME.danger
+            : isFlowHighlighted
+                ? '#93c5fd'
+                : THEME.textMuted,
 });
 
 const traceLabelStyle = {

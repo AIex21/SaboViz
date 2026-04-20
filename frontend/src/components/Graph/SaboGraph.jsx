@@ -32,10 +32,13 @@ const SaboGraph = ({
     hierarchicalClusters,
     activeMicroFeatureId,
     onSelectMicroFeature,
+    activeTraceFlowHighlight,
+    onToggleTraceFlowHighlight,
     isMicroFeatureFlowLoading,
     currentStep,
     onStepChange,
     failureIndices,
+    activeTraceComponentIds = [],
     isDecomposing,
     isProjectSummarizing,
     onSummarizeNode,
@@ -259,7 +262,7 @@ const SaboGraph = ({
             const oldGhost = cyInstance.getElementById(GHOST_EDGE_ID);
             if (oldGhost.length > 0) cyInstance.remove(oldGhost);
             
-            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim lock-root lock-scope edge-focus-root edge-focus-edge');
+            cyInstance.elements().removeClass('trace-active trace-path trace-source feature-highlight feature-dim trace-flow-highlight trace-flow-dim lock-root lock-scope edge-focus-root edge-focus-edge');
 
             // 2. FEATURE HIGHLIGHTING
             if (activeFeatureIds && activeFeatureIds.size > 0) {
@@ -286,6 +289,45 @@ const SaboGraph = ({
                         edge.removeClass('feature-dim').addClass('feature-highlight');
                     }
                 });
+            }
+
+            // 2.4 TRACE-FLOW COMPONENT HIGHLIGHTING
+            if (Array.isArray(activeTraceComponentIds) && activeTraceComponentIds.length > 0) {
+                const resolvedNodeIds = new Set();
+
+                activeTraceComponentIds.forEach((componentId) => {
+                    const visibleId = getVisibleNodeId(componentId);
+                    if (visibleId) resolvedNodeIds.add(String(visibleId));
+                });
+
+                if (resolvedNodeIds.size > 0) {
+                    cyInstance.elements().addClass('feature-dim');
+
+                    const highlightedNodes = [];
+
+                    cyInstance.nodes().forEach((node) => {
+                        const nodeId = String(node.id());
+                        if (resolvedNodeIds.has(nodeId)) {
+                            node.removeClass('feature-dim').addClass('trace-flow-highlight');
+                            highlightedNodes.push(node);
+                        }
+                    });
+
+                    // If a compound parent remains dimmed, its children can appear dimmed too.
+                    // Keep the ancestor chain visible for every highlighted trace-flow node.
+                    highlightedNodes.forEach((node) => {
+                        node.ancestors().removeClass('feature-dim');
+                    });
+
+                    cyInstance.edges().forEach((edge) => {
+                        const src = String(edge.data('source'));
+                        const tgt = String(edge.data('target'));
+
+                        if (resolvedNodeIds.has(src) && resolvedNodeIds.has(tgt)) {
+                            edge.removeClass('feature-dim').addClass('trace-flow-highlight');
+                        }
+                    });
+                }
             }
 
             // 2.5 LOCK FOCUS STYLING
@@ -352,7 +394,7 @@ const SaboGraph = ({
             }
         });
 
-    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, elements, hierarchyMap, lockedScopeIds, lockedNodeIds, edgeFocusNodeIds]); 
+    }, [cyInstance, activeNodeId, sourceNodeId, currentAction, activeFeatureIds, activeTraceComponentIds, elements, hierarchyMap, lockedScopeIds, lockedNodeIds, edgeFocusNodeIds]); 
 
     // --- LAYOUT & EVENTS ---
     useEffect(() => {
@@ -614,6 +656,8 @@ const SaboGraph = ({
                 hierarchicalClusters={hierarchicalClusters}
                 activeMicroFeatureId={activeMicroFeatureId}
                 onSelectMicroFeature={onSelectMicroFeature}
+                activeTraceFlowHighlight={activeTraceFlowHighlight}
+                onToggleTraceFlowHighlight={onToggleTraceFlowHighlight}
                 isMicroFeatureFlowLoading={isMicroFeatureFlowLoading}
                 currentStep={currentStep}
                 onStepChange={onStepChange}

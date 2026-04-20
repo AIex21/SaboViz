@@ -474,6 +474,36 @@ export const saboStylesheet = [
         }
     },
     {
+        selector: '.trace-flow-dim',
+        style: {
+            'opacity': 0.24,
+            'transition-property': 'opacity',
+            'transition-duration': '0.2s'
+        }
+    },
+    {
+        selector: 'node.trace-flow-highlight',
+        style: {
+            'opacity': 1,
+            'border-width': 4,
+            'border-color': '#22c55e',
+            'background-color': '#22c55e',
+            'background-opacity': 0.18,
+            'text-background-opacity': 1,
+            'z-index': 1001
+        }
+    },
+    {
+        selector: 'edge.trace-flow-highlight',
+        style: {
+            'opacity': 1,
+            'width': 3.2,
+            'line-color': '#22c55e',
+            'target-arrow-color': '#22c55e',
+            'z-index': 1000
+        }
+    },
+    {
         selector: 'node.lock-scope',
         style: {
             'border-width': 2,
