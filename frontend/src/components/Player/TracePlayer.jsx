@@ -9,6 +9,7 @@ const BOTTOM_DOCK_THRESHOLD = 24;
 const DOCK_OVERLAP_THRESHOLD = 1200;
 const DOCK_EDGE_TRIGGER = 72;
 const DOCK_RESERVED_GAP = 12;
+const DOCK_FALLBACK_SIDE_INSET = 20;
 const DOCK_PANEL_SELECTORS = {
   left: '[data-overlay-panel="sidebar"]',
   right: '[data-overlay-panel="details"]',
@@ -61,7 +62,9 @@ const TracePlayer = ({
   const [dockSide, setDockSide] = useState(null);
   const [dragDockSide, setDragDockSide] = useState(null);
   const containerRef = useRef(null);
+  const containerSizeRef = useRef({ width: null, height: null });
   const lastReportedDockLayoutRef = useRef({ side: null, reservedHeight: 0 });
+  const dockSnapAnimationFrameRef = useRef(null);
   const dragRef = useRef({
     pointerId: null,
     startX: 0,
@@ -188,6 +191,68 @@ const TracePlayer = ({
     [getContainerDimensions]
   );
 
+  const emitDockLayoutIfChanged = useCallback(() => {
+    if (!onDockLayoutChange) return;
+
+    const nextLayout = !dockSide
+      ? { side: null, reservedHeight: 0 }
+      : (() => {
+          const rect = containerRef.current?.getBoundingClientRect();
+          const measuredHeight = Math.ceil(rect?.height || (isCollapsed ? COLLAPSED_HEIGHT : 300));
+          const normalizedHeight = Math.max(
+            COLLAPSED_HEIGHT,
+            Math.round(measuredHeight / 4) * 4
+          );
+          return {
+            side: dockSide,
+            reservedHeight: normalizedHeight + DOCK_RESERVED_GAP,
+          };
+        })();
+
+    const previousLayout = lastReportedDockLayoutRef.current;
+    const didChange =
+      previousLayout.side !== nextLayout.side ||
+      previousLayout.reservedHeight !== nextLayout.reservedHeight;
+
+    if (!didChange) return;
+
+    lastReportedDockLayoutRef.current = nextLayout;
+    onDockLayoutChange(nextLayout);
+  }, [dockSide, isCollapsed, onDockLayoutChange]);
+
+  const getDockSnapPosition = useCallback((side) => {
+    if (!side || typeof window === "undefined") return null;
+
+    const panelRect = document
+      .querySelector(DOCK_PANEL_SELECTORS[side])
+      ?.getBoundingClientRect();
+
+    const { width, height } = getContainerDimensions();
+    const targetLeft = panelRect
+      ? (side === "left" ? panelRect.left : panelRect.right - width)
+      : (side === "left"
+          ? DOCK_FALLBACK_SIDE_INSET
+          : window.innerWidth - width - DOCK_FALLBACK_SIDE_INSET);
+    const targetTop = window.innerHeight - height - DEFAULT_BOTTOM_OFFSET;
+
+    return clampPositionToViewport(targetLeft, targetTop, width, height);
+  }, [getContainerDimensions]);
+
+  const snapToDockedPanel = useCallback((side) => {
+    const snappedPosition = getDockSnapPosition(side);
+    if (!snappedPosition) return;
+
+    setPosition((prev) => {
+      if (!prev) return snappedPosition;
+
+      const deltaX = Math.abs(prev.left - snappedPosition.left);
+      const deltaY = Math.abs(prev.top - snappedPosition.top);
+      if (deltaX < 1 && deltaY < 1) return prev;
+
+      return snappedPosition;
+    });
+  }, [getDockSnapPosition]);
+
   useEffect(() => {
     if (position) return;
     setPosition(getDefaultPosition());
@@ -222,48 +287,77 @@ const TracePlayer = ({
     if (!element || typeof ResizeObserver === "undefined") return undefined;
 
     const observer = new ResizeObserver(() => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      const fallbackDimensions = getContainerDimensions();
+      const nextWidth = rect?.width ?? fallbackDimensions.width;
+      const nextHeight = rect?.height ?? fallbackDimensions.height;
+      const previousHeight = containerSizeRef.current.height ?? nextHeight;
+
       setPosition((prev) => {
         if (!prev) return prev;
 
-        const next = clampToViewport(prev.left, prev.top);
+        if (dockSide) {
+          const snappedPosition = getDockSnapPosition(dockSide);
+          if (snappedPosition) {
+            if (snappedPosition.left === prev.left && snappedPosition.top === prev.top) return prev;
+            return snappedPosition;
+          }
+        }
+
+        const previousBottomGap = window.innerHeight - (prev.top + previousHeight);
+        if (previousBottomGap <= BOTTOM_DOCK_THRESHOLD) {
+          const bottomAnchoredTop = window.innerHeight - nextHeight - DEFAULT_BOTTOM_OFFSET;
+          const next = clampPositionToViewport(prev.left, bottomAnchoredTop, nextWidth, nextHeight);
+          if (next.left === prev.left && next.top === prev.top) return prev;
+          return next;
+        }
+
+        const next = clampPositionToViewport(prev.left, prev.top, nextWidth, nextHeight);
         if (next.left === prev.left && next.top === prev.top) return prev;
         return next;
       });
+
+      containerSizeRef.current = { width: nextWidth, height: nextHeight };
+
+      emitDockLayoutIfChanged();
     });
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [clampToViewport]);
+  }, [dockSide, emitDockLayoutIfChanged, getContainerDimensions, getDockSnapPosition]);
 
   useEffect(() => {
-    if (!onDockLayoutChange) return undefined;
+    if (!dockSide || isDragging) return undefined;
 
-    const nextLayout = !dockSide
-      ? { side: null, reservedHeight: 0 }
-      : (() => {
-          const rect = containerRef.current?.getBoundingClientRect();
-          const measuredHeight = Math.ceil(rect?.height || (isCollapsed ? COLLAPSED_HEIGHT : 300));
-          return {
-            side: dockSide,
-            reservedHeight: measuredHeight + DOCK_RESERVED_GAP,
-          };
-        })();
+    const scheduleSnap = () => {
+      snapToDockedPanel(dockSide);
+      dockSnapAnimationFrameRef.current = requestAnimationFrame(() => {
+        snapToDockedPanel(dockSide);
+      });
+    };
 
-    const previousLayout = lastReportedDockLayoutRef.current;
-    const didChange =
-      previousLayout.side !== nextLayout.side ||
-      previousLayout.reservedHeight !== nextLayout.reservedHeight;
+    scheduleSnap();
 
-    if (!didChange) return undefined;
+    return () => {
+      if (dockSnapAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(dockSnapAnimationFrameRef.current);
+        dockSnapAnimationFrameRef.current = null;
+      }
+    };
+  }, [dockSide, isDragging, isCollapsed, snapToDockedPanel]);
 
-    lastReportedDockLayoutRef.current = nextLayout;
-    onDockLayoutChange(nextLayout);
-
+  useEffect(() => {
+    emitDockLayoutIfChanged();
     return undefined;
-  }, [dockSide, isCollapsed, onDockLayoutChange]);
+  }, [dockSide, isCollapsed, emitDockLayoutIfChanged]);
 
   useEffect(() => {
     return () => {
+      if (dockSnapAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(dockSnapAnimationFrameRef.current);
+        dockSnapAnimationFrameRef.current = null;
+      }
+
       const clearedLayout = { side: null, reservedHeight: 0 };
       const previousLayout = lastReportedDockLayoutRef.current;
       const didChange =
@@ -359,10 +453,16 @@ const TracePlayer = ({
     );
 
     if (dragState.moved) {
-      setPosition(finalPosition);
       const side = detectDockSide(finalPosition.left, finalPosition.top);
       setDockSide(side);
       setDragDockSide(side);
+
+      if (side) {
+        const snappedPosition = getDockSnapPosition(side);
+        setPosition(snappedPosition || finalPosition);
+      } else {
+        setPosition(finalPosition);
+      }
     } else {
       setDragDockSide(null);
     }
@@ -377,7 +477,7 @@ const TracePlayer = ({
     };
 
     setIsDragging(false);
-  }, [clampToViewport, detectDockSide]);
+  }, [clampToViewport, detectDockSide, getDockSnapPosition]);
 
   const handleHeaderClick = useCallback(() => {
     if (suppressHeaderClickRef.current) {
@@ -386,18 +486,26 @@ const TracePlayer = ({
     }
 
     if (!isCollapsed) {
-      dockToBottomOnCollapse();
+      if (dockSide) {
+        snapToDockedPanel(dockSide);
+      } else {
+        dockToBottomOnCollapse();
+      }
     }
     setIsCollapsed((prev) => !prev);
-  }, [dockToBottomOnCollapse, isCollapsed]);
+  }, [dockSide, dockToBottomOnCollapse, isCollapsed, snapToDockedPanel]);
 
   const handleCollapseToggle = useCallback((event) => {
     event.stopPropagation();
     if (!isCollapsed) {
-      dockToBottomOnCollapse();
+      if (dockSide) {
+        snapToDockedPanel(dockSide);
+      } else {
+        dockToBottomOnCollapse();
+      }
     }
     setIsCollapsed((prev) => !prev);
-  }, [dockToBottomOnCollapse, isCollapsed]);
+  }, [dockSide, dockToBottomOnCollapse, isCollapsed, snapToDockedPanel]);
 
   return (
     <>
