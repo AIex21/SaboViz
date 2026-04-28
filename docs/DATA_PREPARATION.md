@@ -20,7 +20,7 @@ Static dependencies only tell half the story. To capture what the program actual
 ### What Should a Trace Capture?
 To accurately reconstruct the architecture, a trace must represent a **distinct service or feature of the system**. We define a single trace as the complete execution log of a single System Scenario, Use-Case, or End-to-End Feature. To obtain this, utilize **System Integration Tests** or **Manual Execution Scenarios**.
 
-> ⚠️ **Common Pitfall: Avoid using standard Unit Tests.** > Do not extract execution traces from isolated unit tests. Unit tests typically focus on low-level operations and often mock external dependencies. For example, if Component A calls Component B, but B is mocked during the test, the trace fails to capture the true architectural interaction between them, resulting in an incomplete architecture graph.
+> ⚠️ **Common Pitfall: Avoid using standard Unit Tests.** Do not extract execution traces from isolated unit tests. Unit tests typically focus on low-level operations and often mock external dependencies. For example, if Component A calls Component B, but B is mocked during the test, the trace fails to capture the true architectural interaction between them, resulting in an incomplete architecture graph.
 
 ### File Format Requirements
 * Each distinct trace (scenario/use-case) must be saved in its own separate **`.log` file**. 
