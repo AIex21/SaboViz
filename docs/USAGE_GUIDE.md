@@ -231,3 +231,51 @@ When a focused view is active (lock mode, feature focus, or trace focus), SaboVi
 ![Aggregated Node Demonstration](assets/details-aggregated-node.gif)
 *(Gif: Demonstrating clicking an Aggregated node and using the Details Panel to selectively reveal members or their specific dependency edges.)*
 
+### Trace Replay (Dynamic Behavior)
+The **Trace Replay** panel allows you to step through your uploaded execution logs chronologically, animating the exact runtime flow of your system directly on top of the static architecture graph.
+
+#### Selecting & Playing a Trace
+To begin, select an uploaded trace from the dropdown in the Trace Replay panel. You can use the playback controls to step forward, step backward, or auto-play through the execution events. 
+
+**Dynamic Aggregation:** Trace steps represent the lowest-level operations (e.g., specific method calls). However, SaboViz is smart enough to respect your current graph layout. If a specific method is hidden inside a collapsed parent, the execution step will automatically visually trigger on the visible ancestor instead, ensuring you never lose track of the flow.
+
+![Trace Playback Demonstration](assets/trace-playback.gif)
+*(Gif: Demonstrating selecting a trace and stepping through the execution.)*
+
+#### Trace Execution Details (Dynamic Edges)
+When you are replaying a trace, SaboViz animates the execution flow by drawing temporary "ghost edges" over the graph. Clicking one of these active trace edges reveals its specific runtime context:
+
+* **Header:** Displays the "TRACE EXECUTION" badge and the specific operation happening at that moment (e.g., `30: call addPassword`).
+* **Connections:** Shows the exact **Source** component that initiated the step and the **Target** component that received it.
+* **Properties:** Provides the exact runtime telemetry for this single execution step. This includes the step number, action type (e.g., `call`, `return`), parameters passed, logged messages, and a precise timestamp.
+* **System ID:** The internal identifier for these dynamic lines (typically `trace-ghost-edge`).
+
+![Trace Edge Details](assets/details-trace-edge.png)
+*(Image: The Details Panel showing the execution properties and timestamp of a clicked trace edge.)*
+
+#### Trace Resolution Status
+Not all execution logs map perfectly to static code. You can filter and inspect problematic steps using the resolution status features:
+
+* **Ambiguous (Yellow):** The step matched multiple static entities (usually due to overloaded functions missing namespace qualifiers in the logs).
+* **Unresolved (Red):** The step could not be mapped to any parsed entity (often external library calls). 
+
+To locate these mapping issues, click the **Ambiguous** or **Unresolved** buttons to reveal exactly where these problematic steps occur on the progress bar. You can then click directly on these colored indicators on the bar to instantly jump to that specific execution step and inspect its details.
+
+![Trace Status Bar](assets/trace-status.gif)
+*(Gif: Demonstrating clicking the Ambiguous button to reveal yellow indicators on the progress bar, and then clicking an indicator to jump to that specific step.)*
+
+#### Contextual Step Filtering
+The Trace Replay panel works seamlessly with the **Lock (Focused View)** feature to help you debug specific areas of your system. 
+
+If you lock a node (or a set of nodes) to enter a Focused View, the Trace Replay panel will automatically filter its timeline. Instead of showing all 10,000 steps of a massive trace, it will only display the specific execution steps that interact with your currently visible, locked components. 
+
+![Trace Contextual Filtering](assets/trace-filtering.gif)
+*(Gif: Demonstrating a trace timeline shrinking to just a few relevant steps after a specific node is locked on the canvas.)*
+
+#### Workspace Management (Draggable UI)
+Because the architecture graph can get dense, the Trace Replay panel is fully draggable. 
+
+Click and drag the panel by its header to move it around the screen. You can conveniently dock it below the left Sidebar Panel or the right Details Panel to ensure it never obfuscates the critical parts of the graph you are trying to analyze.
+
+![Dragging Trace Panel](assets/trace-drag.gif)
+*(Gif: Demonstrating clicking and dragging the Trace Replay panel to the bottom corner of the screen.)*
