@@ -279,3 +279,42 @@ Click and drag the panel by its header to move it around the screen. You can con
 
 ![Dragging Trace Panel](assets/trace-drag.gif)
 *(Gif: Demonstrating clicking and dragging the Trace Replay panel to the bottom corner of the screen.)*
+
+### Recovered Features
+On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **FUNCTIONAL** tab. This tab populates after you have executed the Functional Decomposition ("Extract Features") from the Project Actions menu.
+
+Here, you can manage and visualize the high-level system functionalities that SaboViz automatically identified from your runtime execution traces:
+
+* **Toggle Feature Visibility:** Click on any feature card to highlight it. Selecting a feature will visually isolate the specific nodes and edges in the architecture graph that actively contribute to that feature during execution. An active checkmark (✓) indicates the feature is currently toggled on.
+* **Feature Categories:** SaboViz visually distinguishes the roles of your clustered entities. Standard business-logic features are represented by a puzzle piece icon (🧩), while global infrastructure or utility modules are represented by a gear icon (⚙️).
+* **Decomposition Scores:** Next to the feature name, a mathematical score is displayed. This score reflects the clustering algorithm's calculations based on how highly coupled the underlying components are.
+* **AI Descriptions (✨):** If you enabled the "Use AI for Feature Naming" configuration during the extraction process, each feature card will include a dedicated summary box marked with a ✨ icon. This provides a human-readable, context-aware explanation of the module's real-world purpose within the broader system.
+
+![Functional Filters Demonstration](assets/sidebar-functional.gif)
+*(Gif: Demonstrating how clicking a recovered feature card isolates the participating nodes on the architecture graph and displays its AI summary.)*
+
+### Execution Trace Analysis (The TRACE Tab)
+On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **TRACE** tab. This tab populates after you run **Trace Decomposition** from the Project Actions menu.
+
+The Trace tab helps you understand the chronological flow of a specific execution trace by breaking down thousands of raw operations into a readable hierarchy of logical phases.
+
+#### Trace Flow (Macro and Micro-Features)
+The top section of the Trace tab displays the **Trace Flow** timeline, which organizes the execution sequence into two levels of abstraction:
+
+* **The Hierarchical Flow:** These top-level segments represent large, coherent chapters of execution (e.g., a complete "User Authentication" phase). They are created by grouping structurally similar micro-features together. **Double-clicking** a segment in the hierarchical flow expands it to reveal its underlying children (the micro-features).
+* **The Micro-Feature Flow:** These are the granular, sequential building blocks that make up a hierarchical phase. They represent distinct, short-lived tasks within the trace (e.g., "Validating Password Hash"). 
+
+**Clicking** on any segment in the flow (either a hierarchical macro-phase or a micro-feature) will instantly isolate it and reveal additional contextual information:
+
+* **AI Naming & Summary (✨):** If enabled during the trace decomposition, clicking a segment displays its AI-generated human-readable name and a descriptive summary explaining the specific goal of that system phase.
+* **Highlighting Steps:** Selecting a segment will automatically scroll and highlight the associated raw operations in the **Steps List** below.
+* **Highlight Cluster Component Button:** When a segment is selected, you can click the "Highlight Cluster Components" button. This action visually isolates the specific static architectural components (nodes and edges) on the main graph canvas that are involved in this exact execution segment, dimming the rest of the architecture.
+
+![Trace Flow Interaction](assets/sidebar-trace-flow.gif)
+*(Gif: Demonstrating double-clicking a hierarchical segment to expand it, clicking a micro-feature to view its AI summary, and pressing the Highlight Cluster Components button to isolate nodes on the graph.)*
+
+#### The Steps List
+Below the Trace Flow visualization is the **Steps List**, a chronological ledger of every single operation (function calls, returns, etc.) that occurred during the execution.
+
+* **Visual Mapping:** When you click a segment in the Trace Flow timeline, SaboViz automatically scrolls to and highlights the corresponding raw execution steps in this list. This allows you to instantly jump from a high-level feature concept down directly to the specific code functions that were executed.
+* **Playback Sync:** As you animate the graph using the Trace Replay panel, the Steps List automatically tracks the execution, keeping the currently active step highlighted and in view.
