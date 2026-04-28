@@ -204,8 +204,30 @@ To solve this, open a node's details and click the **Focus Edges (↔)** button 
 
 **What it does:** Activating this feature instantly **hides** all unrelated edges from the canvas, leaving only the *incoming* (who depends on it) and *outgoing* (what it depends on) connections visible of the selected node. 
 
-**To disable Edge Focus:** You can either click the **(↔)** button in the details panel again, or click the `Edge Focus` button that appears in the top-left corner of the page.
+**To disable Edge Focus:** You can either click the **(↔)** button in the details panel again, or click the **✕** on the `Edge Focus` badge.
 
 ![Edge Focus Demonstration](assets/details-edge-focus.gif)
 *(Gif: Demonstrating how clicking the Edge Focus button works for the `main` operation.)*
+
+#### 6. Locking Nodes (Focused View)
+When a graph becomes dense, you can lock one or more nodes to focus on their local neighborhood.
+
+* Open a node's Details Panel and click the **🔒 Lock** button in the header.
+* You can lock multiple nodes to compare their scopes at once.
+* While focused, the canvas shows only the locked nodes, their descendants, and the connections between them.
+* A **🔒 Focused** badge appears in the top bar. Click the **✕** on the badge or unlock the node in the Details Panel to exit focus mode.
+
+![Lock Node Demonstration](assets/details-lock.gif)
+*(Gif: Demonstrating locking a node, seeing the focused view, and clicking the top bar badge to exit.)*
+
+#### 7. Aggregated Nodes (Focus Buckets)
+When a focused view is active (lock mode, feature focus, or trace focus), SaboViz groups the out-of-scope nodes into **Aggregated Nodes** to keep the view readable.
+
+* **What they are:** Placeholders that represent a bucket of hidden nodes, shown as a single node labeled with a count (e.g., *aggregated (12)*).
+* **Why they appear:** To preserve context without flooding the canvas with unrelated entities.
+* **How to expand them:** Open the Aggregated node's Details Panel to reveal individual members or show their dependencies back into the focused scope.
+* **Edges:** Aggregated nodes do not automatically draw every hidden connection. Instead, you can selectively reveal edges per member from the Details Panel.
+
+![Aggregated Node Demonstration](assets/details-aggregated-node.gif)
+*(Gif: Demonstrating clicking an Aggregated node and using the Details Panel to selectively reveal members or their specific dependency edges.)*
 
