@@ -51,4 +51,4 @@ A valid execution event must be a single comma-separated line containing at leas
 3. **Parameters:** For entry events (`>`), place the function parameters inside parentheses in the message string.
 4. **Return Values:** For exit events (`<`), standard patterns like `returnValue="OK"` or `returnValue=1` in the message string will be automatically parsed and displayed in the UI.
 
-Once your `.zip` source code and your `.log` execution trace files are prepared, proceed to the **[Usage Guide](docs/USAGE_GUIDE.md)** to learn how to analyze them in the SaboViz dashboard.
+Once your `.zip` source code and your `.log` execution trace files are prepared, proceed to the **[Usage Guide](USAGE_GUIDE.md)** to learn how to analyze them in the SaboViz dashboard.
