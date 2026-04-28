@@ -2,17 +2,6 @@
 
 This document explains the execution flow of each major analysis component in SaboViz.
 
-## Setup
-
-Use one of the options below to view the flows:
-
-1. GitHub/GitLab Markdown view:
-   - Open this file and scroll to the component section you want.
-   - Mermaid blocks should render directly in modern Markdown viewers.
-2. VS Code:
-   - Open this file and use the Markdown Preview.
-   - Open any `.mmd` file in `execution-flow/Mermaid/` for the raw diagram source.
-
 ## Components
 
 Click a component to jump to its full flow and node-by-node explanation.
