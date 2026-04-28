@@ -131,4 +131,4 @@ The graph is fully interactive, allowing you to explore the architecture at vary
 * **Reposition Nodes:** Click and drag any node to move it around the canvas. This allows you to manually organize the graph layout to better suit your comprehension needs.
 
 ![Graph Interactions Demonstration](assets/graph-interactions.gif)
-*(Gif: Demonstrating how to double-click to expand a node and drag to reposition it.)*
+*(Gif: Demonstrating how to double-click to expand/collapse a node and drag to reposition it.)*
