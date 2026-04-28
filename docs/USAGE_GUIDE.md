@@ -122,3 +122,13 @@ After running your decompositions, click on the project card to enter the intera
 
 ![Graph Page Overview](assets/graph-main.png)
 *(Image: A wide shot of the interactive node graph and side panels.)*
+
+### Interacting with the Architecture
+The graph is fully interactive, allowing you to explore the architecture at varying levels of detail:
+
+* **Expand a Node:** Double-click on a parent node (like a File or a Class) to expand it and reveal its internal structure (its children, such as internal Methods or nested Classes).
+* **Collapse a Node:** Double-click an expanded node again to collapse it, hiding its children and simplifying your view.
+* **Reposition Nodes:** Click and drag any node to move it around the canvas. This allows you to manually organize the graph layout to better suit your comprehension needs.
+
+![Graph Interactions Demonstration](assets/graph-interactions.gif)
+*(Gif: Demonstrating how to double-click to expand a node and drag to reposition it.)*
