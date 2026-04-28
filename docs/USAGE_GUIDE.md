@@ -132,3 +132,80 @@ The graph is fully interactive, allowing you to explore the architecture at vary
 
 ![Graph Interactions Demonstration](assets/graph-interactions.gif)
 *(Gif: Demonstrating how to double-click to expand/collapse a node and drag to reposition it.)*
+
+### Structural Filters (Edge Visibility)
+On the left side of the Graph Page, you will find the **Sidebar Panel**. Under the **STRUCTURAL** tab, you can control the visual complexity of the architecture by toggling different types of relationship edges **ON** or **OFF**. 
+
+This allows you to declutter large graphs and focus purely on the specific architectural perspectives you care about at that moment.
+
+| Edge Type | What it Represents |
+| :--- | :--- |
+| **Invokes** | Static method-to-method calls or function invocations (*Operation → Operation*). |
+| **Requires** | File-level dependencies, such as `#include` directives (*File → File*). |
+| **Specializes** | Object-oriented inheritance hierarchies, where a derived class specializes a base class (*Type → Type*). |
+| **Instantiates** | Indicates when a specific method or function creates an object instance of a class (*Operation → Type*). |
+| **Aggregated Edges** | **Important:** When you collapse a parent node, the dependencies of its hidden children are "rolled up" to the parent level. Aggregated edges represent these hidden dependencies. For example, if a hidden method inside *Class A* invokes a method in *Class B*, an aggregated edge will be drawn directly connecting *Class A* to *Class B*. |
+
+To hide or show a specific relationship type, simply click its corresponding toggle switch in the sidebar. The graph will instantly redraw to reflect your active filters.
+
+![Structural Filters Demonstration](assets/sidebar-structural.gif)
+*(Gif: Demonstrating how toggling structural filters immediately hides or shows the corresponding edges on the architecture graph.)*
+
+### Inspecting Entities (The Details Panel)
+To deeply understand specific parts of your architecture, you can click on any node or edge to open the **Details Panel** on the right side of the screen. The information displayed adapts based on the type of entity you select.
+
+#### 1. Node Details
+Clicking a standard software entity (like a File, Class, or Method) will display its complete architectural context. The panel is divided into the following sections:
+
+* **Header:** Displays the node's simple name and its entity type.
+* **Properties:** Lists technical metadata extracted during parsing. 
+* **Participating Features:** If you have run Functional Decomposition, this section lists all the high-level system features (or infrastructure groups) that this specific node contributes to at runtime.
+* **System ID:** The unique internal identifier used by SaboViz to track the entity.
+* **AI Summary:** If you enabled AI summarization, this section displays a human-readable, semantic explanation of what the node does and what its responsibilities are within the broader system.
+
+![Node Details Panel](assets/details-node.png)
+*(Image: The Details Panel showing the properties, participating features, and AI summary of the `include` folder.)*
+
+#### 2. Regular Edge Details
+Clicking a standard relationship line will display the direct connection between two structural entities. The panel focuses purely on how these two entities interact:
+
+* **Header:** Displays the specific relationship type (e.g., "Invokes", "Requires").
+* **Connections:** Shows the explicit **Source** node (where the interaction originates) and the **Target** node (the receiver of the interaction). The full path or signature of each node is provided for clarity.
+* **System ID:** The unique internal identifier used by SaboViz to track this specific relationship.
+
+![Regular Edge Details](assets/details-edge.png)
+*(Image: The Details Panel showing the source and target connection of a regular 'Invokes' edge.)*
+
+#### 3. Aggregated Edge Details
+When parent nodes (like folders or classes) are collapsed, the dependencies of their hidden children are "rolled up" into a single aggregated edge. Clicking this edge reveals the underlying complexity:
+
+* **Header:** Displays the "Aggregate Group" badge and the total number of hidden connections it represents (e.g., "Connections (21)").
+* **Connections:** Shows the high-level **Source** and **Target** parent nodes (e.g., `folder::/src` to `folder::/include`) that encompass these hidden dependencies.
+* **Edge Composition:** Provides a precise breakdown of the specific relationship types hidden within this single line. For example, it will tell you exactly how many of those 21 connections are "Invokes" versus "Requires".
+* **System ID:** The unique internal identifier used by SaboViz to track this aggregated group.
+
+![Aggregated Edge Details](assets/details-aggregated.png)
+*(Image: The Details Panel showing the source, target, and edge composition breakdown of an aggregated edge.)*
+
+#### 4. AI Node Summarization
+At the top of the Node Details panel, you will find a **Summarize** button (✨). Clicking this button triggers the integrated LLM to generate a custom, semantic explanation of that specific entity on demand.
+
+**How it works:** SaboViz does not just look at the node in isolation. The AI summarization dynamically analyzes the selected node **and all of its underlying dependencies (lower nodes)**. Because a software component's true purpose relies heavily on what it interacts with, this deep analysis ensures the generated summary accurately reflects the node's real-world responsibilities and context within the system.
+
+Once generated, the explanation will be saved and displayed at the bottom of the Details Panel under the **AI Summary** section.
+
+![Summarize Node Action](assets/details-summarize.png)
+*(Image: Pointing out the Summarize button (✨) at the top of the panel and the resulting AI Summary at the bottom.)*
+
+#### 5. Edge Focus (Isolating Connections)
+In highly complex and dense architectures, it can be difficult to trace exactly what a single class or file is interacting with. 
+
+To solve this, open a node's details and click the **Focus Edges (↔)** button located at the top right of the panel. 
+
+**What it does:** Activating this feature instantly **hides** all unrelated edges from the canvas, leaving only the *incoming* (who depends on it) and *outgoing* (what it depends on) connections visible of the selected node. 
+
+**To disable Edge Focus:** You can either click the **(↔)** button in the details panel again, or click the `Edge Focus` button that appears in the top-left corner of the page.
+
+![Edge Focus Demonstration](assets/details-edge-focus.gif)
+*(Gif: Demonstrating how clicking the Edge Focus button works for the `main` operation.)*
+
