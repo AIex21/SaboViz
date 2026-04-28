@@ -3,11 +3,8 @@ import { THEME } from '../../config/graphConfig';
 import ModalButton from '../Common/ModalButton';
 
 const DecompositionModal = ({ project, onClose, onConfirm }) => {
-    const [decompositionMethod, setDecompositionMethod] = useState('agglomerative');
     const [distanceThreshold, setDistanceThreshold] = useState(0.4);
     const [infrastructureThreshold, setInfrastructureThreshold] = useState(0.3);
-    const [overlapAlpha, setOverlapAlpha] = useState(0.8);
-    const [leidenResolution, setLeidenResolution] = useState(3.0);
     const [useAi, setUseAi] = useState(true);
 
     const [activeTooltip, setActiveTooltip] = useState(null);
@@ -18,9 +15,9 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
             distanceThreshold,
             infrastructureThreshold,
             useAi,
-            decompositionMethod,
-            overlapAlpha,
-            leidenResolution
+            'agglomerative',
+            null,
+            null
         );
         onClose();
     };
@@ -38,27 +35,10 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                 {/* Body */}
                 <div style={styles.body}>
                     <p style={styles.description}>
-                        {decompositionMethod === 'agglomerative'
-                            ? 'Configure thresholds for the agglomerative decomposition.'
-                            : 'Configure graph-community decomposition.'}
+                        Configure thresholds for hierarchical agglomerative clustering.
                     </p>
 
                     <div style={styles.controlGroup}>
-                        <div style={styles.labelRow}>
-                            <label style={styles.label}>Decomposition Method</label>
-                        </div>
-                        <select
-                            value={decompositionMethod}
-                            onChange={(e) => setDecompositionMethod(e.target.value)}
-                            style={styles.select}
-                        >
-                            <option value="agglomerative" style={styles.selectOption}>Hierarchical Agglomerative Clustering</option>
-                            <option value="graph_community" style={styles.selectOption}>Graph Community</option>
-                        </select>
-                    </div>
-
-                    {/* Distance Threshold Control */}
-                    {decompositionMethod === 'agglomerative' && <div style={styles.controlGroup}>
                         <div style={styles.labelRow}>
                             <label style={styles.label}>Distance Threshold</label>
                             <div 
@@ -88,10 +68,9 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                             onChange={(e) => setDistanceThreshold(parseFloat(e.target.value))}
                             style={styles.slider}
                         />
-                    </div>}
+                    </div>
 
-                    {/* Infrastructure Threshold Control */}
-                    {decompositionMethod === 'agglomerative' && <div style={styles.controlGroup}>
+                    <div style={styles.controlGroup}>
                         <div style={styles.labelRow}>
                             <label style={styles.label}>Infrastructure Threshold</label>
                             <div 
@@ -122,73 +101,7 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                             onChange={(e) => setInfrastructureThreshold(parseFloat(e.target.value))}
                             style={styles.slider}
                         />
-                    </div>}
-
-                    {decompositionMethod === 'graph_community' && <div style={styles.controlGroup}>
-                        <div style={styles.labelRow}>
-                            <label style={styles.label}>Leiden Resolution</label>
-                            <div
-                                style={styles.tooltipContainer}
-                                onMouseEnter={() => setActiveTooltip('resolution')}
-                                onMouseLeave={() => setActiveTooltip(null)}
-                            >
-                                <span style={styles.questionMark}>?</span>
-                                <div style={{
-                                    ...styles.tooltipText,
-                                    opacity: activeTooltip === 'resolution' ? 1 : 0,
-                                    visibility: activeTooltip === 'resolution' ? 'visible' : 'hidden',
-                                    transform: activeTooltip === 'resolution' ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(10px)'
-                                }}>
-                                    Controls how finely Leiden splits the co-execution graph into candidate features.
-                                    <br/><br/>
-                                    <strong>Lower (0.8):</strong> Larger, fewer feature communities.
-                                    <br/>
-                                    <strong>Higher (4.5):</strong> Smaller, more feature communities.
-                                </div>
-                            </div>
-                            <span style={styles.valueDisplay}>{leidenResolution.toFixed(1)}</span>
-                        </div>
-                        <input
-                            type="range"
-                            min="0.5" max="5.0" step="0.1"
-                            value={leidenResolution}
-                            onChange={(e) => setLeidenResolution(parseFloat(e.target.value))}
-                            style={styles.slider}
-                        />
-                    </div>}
-
-                    {decompositionMethod === 'graph_community' && <div style={styles.controlGroup}>
-                        <div style={styles.labelRow}>
-                            <label style={styles.label}>Overlap Alpha</label>
-                            <div
-                                style={styles.tooltipContainer}
-                                onMouseEnter={() => setActiveTooltip('alpha')}
-                                onMouseLeave={() => setActiveTooltip(null)}
-                            >
-                                <span style={styles.questionMark}>?</span>
-                                <div style={{
-                                    ...styles.tooltipText,
-                                    opacity: activeTooltip === 'alpha' ? 1 : 0,
-                                    visibility: activeTooltip === 'alpha' ? 'visible' : 'hidden',
-                                    transform: activeTooltip === 'alpha' ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(10px)'
-                                }}>
-                                    Controls how permissive the overlap assignment is between candidate features.
-                                    <br/><br/>
-                                    <strong>Lower (0.5):</strong> More shared memberships across features.
-                                    <br/>
-                                    <strong>Higher (0.9):</strong> Stricter feature boundaries.
-                                </div>
-                            </div>
-                            <span style={styles.valueDisplay}>{overlapAlpha}</span>
-                        </div>
-                        <input
-                            type="range"
-                            min="0" max="1" step="0.05"
-                            value={overlapAlpha}
-                            onChange={(e) => setOverlapAlpha(parseFloat(e.target.value))}
-                            style={styles.slider}
-                        />
-                    </div>}
+                    </div>
 
                     <div style={styles.controlGroup}>
                         <div style={styles.labelRow}>
@@ -271,18 +184,6 @@ const styles = {
     },
     slider: {
         width: '100%', cursor: 'pointer', accentColor: THEME.primary
-    },
-    select: {
-        border: `1px solid ${THEME.border}`,
-        borderRadius: '8px',
-        padding: '10px 12px',
-        backgroundColor: '#000000',
-        color: '#ffffff',
-        fontSize: '13px',
-    },
-    selectOption: {
-        backgroundColor: '#000000',
-        color: '#ffffff'
     },
     toggleRow: {
         display: 'flex',
