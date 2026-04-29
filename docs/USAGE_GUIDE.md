@@ -26,6 +26,8 @@ The Dashboard is your control center. Here, you can upload data, manage projects
 ![Main Dashboard View](assets/dashboard-main.png)
 *(Image: The main SaboViz dashboard showing active projects and action buttons.)*
 
+---
+
 ### Creating a Project
 To start a new analysis, navigate to the Dashboard and follow these steps:
 1. Enter a **Name** for your project.
@@ -45,6 +47,8 @@ Select your preferred configuration and confirm to begin parsing.
 ![Create Project Options Modal](assets/create-project-modal.png)
 *(Image: The configuration modal showing the "Auto-continue" and "Run AI summarization" checkboxes.)*
 
+---
+
 ### Handling "Action Needed" Status
 if you choose *not* to auto-continue and the parser cannot locate specific libraries defined in your `#include` directives, the project status will flag as **Action Needed**.
 
@@ -56,6 +60,8 @@ if you choose *not* to auto-continue and the parser cannot locate specific libra
 
 ![Action Needed Modal](assets/action-needed-modal.png)
 *(Image: The Action Needed modal listing missing C++ header files.)*
+
+---
 
 ### Project Actions & Analysis
 Once your static project is ready, you can manage your dynamic data and trigger analyses by clicking the **Actions** button on your project card. This opens the **Project Actions** modal, which serves as your central menu for the following functionalities:
@@ -73,6 +79,8 @@ Once your static project is ready, you can manage your dynamic data and trigger 
 ![Project Actions Modal](assets/project-actions-modal.png)
 *(Image: The Project Actions modal showing the list of available management and analysis options.)*
 
+---
+
 ### Adding Execution Traces
 To merge dynamic runtime behavior with your structural code, you must add your generated execution traces.
 1. Click the **Actions** button on your project and select **Add New Trace**.
@@ -82,6 +90,8 @@ To merge dynamic runtime behavior with your structural code, you must add your g
 
 ![Add Trace Modal](assets/add-trace-modal.png)
 *(Image: The Add Trace modal showing the drag-and-drop file upload area and action buttons.)*
+
+---
 
 ### Managing Traces (View All Traces)
 To inspect or delete the execution traces you have uploaded to a project, open the Project Actions modal and click **View All Traces**. This will open a modal listing all dynamic scenarios currently mapped to your architecture.
@@ -101,6 +111,8 @@ For each trace, SaboViz provides a detailed breakdown of how successfully the dy
 ![View All Traces Modal](assets/view-all-traces-modal.png)
 *(Image: The View All Traces modal showing the list of uploaded traces and their mapping statistics.)*
 
+---
+
 ### Extracting Features (Functional Decomposition)
 To identify the high-level system features based on your uploaded execution traces, open the Project Actions modal and click **Extract Features**. 
 
@@ -116,6 +128,8 @@ Select your desired thresholds and click **Start Extraction** to begin the funct
 
 ![Extract Features Modal](assets/extract-features-modal.png)
 *(Image: The Extract Features configuration modal showing the distance threshold, infrastructure threshold, and AI naming toggle.)*
+
+---
 
 ### Trace Decomposition (Micro-Feature Segmentation)
 To break down long, complex execution traces into readable, logical segments (micro-features), open the Project Actions modal and click **Trace Decomposition**. 
@@ -133,12 +147,16 @@ Select your desired parameters and click **Start Trace Decomposition** to proces
 ![Trace Decomposition Modal](assets/trace-decomposition-modal.png)
 *(Image: The Trace Decomposition configuration modal showing the PELT penalty, distance threshold, and AI naming toggle.)*
 
+---
+
 ## 2. The Graph Page: Architecture Visualization
 
 After running your decompositions, click on the project card to enter the interactive Architecture Visualization dashboard. This is where the hybrid data comes to life.
 
 ![Graph Page Overview](assets/graph-main.png)
 *(Image: A wide shot of the interactive node graph and side panels.)*
+
+---
 
 ### Interacting with the Architecture
 The graph is fully interactive, allowing you to explore the architecture at varying levels of detail:
@@ -149,6 +167,8 @@ The graph is fully interactive, allowing you to explore the architecture at vary
 
 ![Graph Interactions Demonstration](assets/graph-interactions.gif)
 *(Gif: Demonstrating how to double-click to expand/collapse a node and drag to reposition it.)*
+
+---
 
 ### Structural Filters (Edge Visibility)
 On the left side of the Graph Page, you will find the **Sidebar Panel**. Under the **STRUCTURAL** tab, you can control the visual complexity of the architecture by toggling different types of relationship edges **ON** or **OFF**. 
@@ -168,6 +188,8 @@ To hide or show a specific relationship type, simply click its corresponding tog
 ![Structural Filters Demonstration](assets/sidebar-structural.gif)
 *(Gif: Demonstrating how toggling structural filters immediately hides or shows the corresponding edges on the architecture graph.)*
 
+---
+
 ### Inspecting Entities (The Details Panel)
 To deeply understand specific parts of your architecture, you can click on any node or edge to open the **Details Panel** on the right side of the screen. The information displayed adapts based on the type of entity you select.
 
@@ -183,6 +205,8 @@ Clicking a standard software entity (like a File, Class, or Method) will display
 ![Node Details Panel](assets/details-node.png)
 *(Image: The Details Panel showing the properties, participating features, and AI summary of the `include` folder.)*
 
+---
+
 #### 2. Regular Edge Details
 Clicking a standard relationship line will display the direct connection between two structural entities. The panel focuses purely on how these two entities interact:
 
@@ -192,6 +216,8 @@ Clicking a standard relationship line will display the direct connection between
 
 ![Regular Edge Details](assets/details-edge.png)
 *(Image: The Details Panel showing the source and target connection of a regular 'Invokes' edge.)*
+
+---
 
 #### 3. Aggregated Edge Details
 When parent nodes (like folders or classes) are collapsed, the dependencies of their hidden children are "rolled up" into a single aggregated edge. Clicking this edge reveals the underlying complexity:
@@ -204,6 +230,8 @@ When parent nodes (like folders or classes) are collapsed, the dependencies of t
 ![Aggregated Edge Details](assets/details-aggregated.png)
 *(Image: The Details Panel showing the source, target, and edge composition breakdown of an aggregated edge.)*
 
+---
+
 #### 4. AI Node Summarization
 At the top of the Node Details panel, you will find a **Summarize** button (✨). Clicking this button triggers the integrated LLM to generate a custom, semantic explanation of that specific entity on demand.
 
@@ -213,6 +241,8 @@ Once generated, the explanation will be saved and displayed at the bottom of the
 
 ![Summarize Node Action](assets/details-summarize.png)
 *(Image: Pointing out the Summarize button (✨) at the top of the panel and the resulting AI Summary at the bottom.)*
+
+---
 
 #### 5. Edge Focus (Isolating Connections)
 In highly complex and dense architectures, it can be difficult to trace exactly what a single class or file is interacting with. 
@@ -226,6 +256,8 @@ To solve this, open a node's details and click the **Focus Edges (↔)** button 
 ![Edge Focus Demonstration](assets/details-edge-focus.gif)
 *(Gif: Demonstrating how clicking the Edge Focus button works for the `main` operation.)*
 
+---
+
 #### 6. Locking Nodes (Focused View)
 When a graph becomes dense, you can lock one or more nodes to focus on their local neighborhood.
 
@@ -237,6 +269,8 @@ When a graph becomes dense, you can lock one or more nodes to focus on their loc
 ![Lock Node Demonstration](assets/details-lock.gif)
 *(Gif: Demonstrating locking a node, seeing the focused view, and clicking the top bar badge to exit.)*
 
+---
+
 #### 7. Aggregated Nodes (Focus Buckets)
 When a focused view is active (lock mode, feature focus, or trace focus), SaboViz groups the out-of-scope nodes into **Aggregated Nodes** to keep the view readable.
 
@@ -247,6 +281,8 @@ When a focused view is active (lock mode, feature focus, or trace focus), SaboVi
 
 ![Aggregated Node Demonstration](assets/details-aggregated-node.gif)
 *(Gif: Demonstrating clicking an Aggregated node and using the Details Panel to selectively reveal members or their specific dependency edges.)*
+
+---
 
 ### Trace Replay (Dynamic Behavior)
 The **Trace Replay** panel allows you to step through your uploaded execution logs chronologically, animating the exact runtime flow of your system directly on top of the static architecture graph.
@@ -297,6 +333,8 @@ Click and drag the panel by its header to move it around the screen. You can con
 ![Dragging Trace Panel](assets/trace-drag.gif)
 *(Gif: Demonstrating clicking and dragging the Trace Replay panel to the bottom corner of the screen.)*
 
+---
+
 ### Recovered Features
 On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **FUNCTIONAL** tab. This tab populates after you have executed the Functional Decomposition ("Extract Features") from the Project Actions menu.
 
@@ -309,6 +347,8 @@ Here, you can manage and visualize the high-level system functionalities that Sa
 
 ![Functional Filters Demonstration](assets/sidebar-functional.gif)
 *(Gif: Demonstrating how clicking a recovered feature card isolates the participating nodes on the architecture graph and displays its AI summary.)*
+
+---
 
 ### Trace Decomposition
 On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **TRACE** tab. This tab populates after you run **Trace Decomposition** from the Project Actions menu.
