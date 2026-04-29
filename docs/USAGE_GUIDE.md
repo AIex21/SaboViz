@@ -2,6 +2,23 @@
 
 Welcome to the SaboViz Usage Guide. This document will walk you through the core functionalities of the tool, from uploading your initial data to interacting with the recovered architectural graphs.
 
+## Table of Contents
+- [1. The Dashboard: Project Management & Analysis](#1-the-dashboard-project-management--analysis)
+  - [Creating a Project](#creating-a-project)
+  - [Handling "Action Needed" Status](#handling-action-needed-status)
+  - [Project Actions & Analysis](#project-actions--analysis)
+  - [Adding Execution Traces](#adding-execution-traces)
+  - [Managing Traces (View All Traces)](#managing-traces-view-all-traces)
+  - [Extracting Features (Functional Decomposition)](#extracting-features-functional-decomposition)
+  - [Trace Decomposition (Micro-Feature Segmentation)](#trace-decomposition-micro-feature-segmentation)
+- [2. The Graph Page: Architecture Visualization](#2-the-graph-page-architecture-visualization)
+  - [Interacting with the Architecture](#interacting-with-the-architecture)
+  - [Structural Filters (Edge Visibility)](#structural-filters-edge-visibility)
+  - [Inspecting Entities (The Details Panel)](#inspecting-entities-the-details-panel)
+  - [Trace Replay (Dynamic Behavior)](#trace-replay-dynamic-behavior)
+  - [Recovered Features](#recovered-features)
+  - [Trace Decomposition](#trace-decomposition)
+
 ## 1. The Dashboard: Project Management & Analysis
 
 The Dashboard is your control center. Here, you can upload data, manage projects, and trigger architectural analyses.
@@ -293,7 +310,7 @@ Here, you can manage and visualize the high-level system functionalities that Sa
 ![Functional Filters Demonstration](assets/sidebar-functional.gif)
 *(Gif: Demonstrating how clicking a recovered feature card isolates the participating nodes on the architecture graph and displays its AI summary.)*
 
-### Execution Trace Analysis (The TRACE Tab)
+### Trace Decomposition
 On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **TRACE** tab. This tab populates after you run **Trace Decomposition** from the Project Actions menu.
 
 The Trace tab helps you understand the chronological flow of a specific execution trace by breaking down thousands of raw operations into a readable hierarchy of logical phases.
