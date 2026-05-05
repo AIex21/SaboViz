@@ -1,6 +1,6 @@
 import re
 from collections import Counter
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -35,6 +35,136 @@ class FunctionalDecompositionService:
         self.trace_decomposition = TraceDecomposition(self.graph_service)
         self.agglomerative_decomposition = AgglomerativeDecomposition(self)
         self.graph_community_decomposition = GraphCommunityDecomposition(self)
+
+        self.decomp_project_id: Optional[int] = None
+        self.decomp_total = 0
+        self.decomp_done = 0
+        self.decomp_mode = "persist"
+
+        self.trace_project_id: Optional[int] = None
+        self.trace_total = 0
+        self.trace_done = 0
+        self.trace_label: Optional[str] = None
+        self.trace_mode = "persist"
+
+    def _reset_decomposition_progress(self, project_id: int):
+        self.decomp_project_id = project_id
+        self.decomp_total = 0
+        self.decomp_done = 0
+        self.decomp_mode = "persist"
+
+    def _set_decomposition_status(self, description: str):
+        if self.decomp_project_id is None:
+            return
+
+        self.graph_service.change_project_status(
+            self.decomp_project_id,
+            status="decomposing",
+            description=description,
+        )
+
+    def init_decomposition_progress(self, total: int, allow_ai: bool):
+        if self.decomp_project_id is None:
+            return
+
+        self.decomp_total = max(int(total or 0), 0)
+        self.decomp_done = 0
+        self.decomp_mode = "ai" if allow_ai else "persist"
+
+        if self.decomp_total > 0:
+            self._update_decomposition_progress()
+
+    def increment_decomposition_progress(self, feature_name: Optional[str] = None):
+        if self.decomp_project_id is None or self.decomp_total <= 0:
+            return
+
+        self.decomp_done = min(self.decomp_done + 1, self.decomp_total)
+        self._update_decomposition_progress(feature_name)
+
+    def _update_decomposition_progress(self, feature_name: Optional[str] = None):
+        if self.decomp_project_id is None or self.decomp_total <= 0:
+            return
+
+        percent = int((self.decomp_done / self.decomp_total) * 100)
+        prefix = "Summarizing features" if self.decomp_mode == "ai" else "Persisting features"
+        message = f"{prefix} {self.decomp_done}/{self.decomp_total} ({percent}%)"
+
+        if feature_name:
+            message = f"{message} - {feature_name}"
+
+        self.graph_service.change_project_status(
+            self.decomp_project_id,
+            status="decomposing",
+            description=message,
+        )
+
+    def _reset_trace_progress(self, project_id: int):
+        self.trace_project_id = project_id
+        self.trace_total = 0
+        self.trace_done = 0
+        self.trace_label = None
+        self.trace_mode = "persist"
+
+    def _set_trace_status(self, description: str):
+        if self.trace_project_id is None:
+            return
+
+        self.graph_service.change_project_status(
+            self.trace_project_id,
+            status="decomposing",
+            description=description,
+        )
+
+    def _update_trace_progress(
+        self,
+        phase: str,
+        done: int,
+        total: Optional[int],
+        trace_label: Optional[str],
+        segment_name: Optional[str],
+        allow_ai: bool,
+        trace_index: Optional[int] = None,
+        total_traces: Optional[int] = None,
+    ):
+        if self.trace_project_id is None:
+            return
+
+        if total is not None and total > 0:
+            self.trace_total = int(total)
+            self.trace_done = max(0, min(int(done), self.trace_total))
+        else:
+            self.trace_total = 0
+            self.trace_done = max(0, int(done))
+        self.trace_mode = "ai" if allow_ai else "persist"
+
+        if trace_label:
+            self.trace_label = trace_label
+
+        if phase == "hierarchical":
+            prefix = "Merge summaries" if self.trace_mode == "ai" else "Merge processing"
+        else:
+            prefix = "Segment summaries" if self.trace_mode == "ai" else "Segment processing"
+        trace_prefix = ""
+        if trace_index is not None and total_traces is not None:
+            trace_prefix = f"Trace {trace_index}/{total_traces}: "
+
+        if self.trace_total > 0:
+            percent = int((self.trace_done / self.trace_total) * 100)
+            message = f"{trace_prefix}{prefix} {self.trace_done}/{self.trace_total} ({percent}%)"
+        else:
+            message = f"{trace_prefix}{prefix} {self.trace_done}"
+
+        if not trace_prefix and self.trace_label:
+            message = f"{message} - {self.trace_label}"
+
+        if segment_name:
+            message = f"{message} - {segment_name}"
+
+        self.graph_service.change_project_status(
+            self.trace_project_id,
+            status="decomposing",
+            description=message,
+        )
 
     def load_traces(self, project_id: int):
         traces = self.trace_service.get_project_traces(project_id)
@@ -146,6 +276,8 @@ class FunctionalDecompositionService:
         feature.nodes = linked_nodes
         self.feature_repo.create_feature_without_commit(feature)
 
+        self.increment_decomposition_progress(feature_name)
+
     def generate_feature_name(self, components):
         words = []
 
@@ -183,8 +315,10 @@ class FunctionalDecompositionService:
         self.graph_service.change_project_status(
             project_id,
             status="decomposing",
-            description="Functional Decomposition started...",
+            description="Functional Decomposition: Preprocessing traces...",
         )
+
+        self._reset_decomposition_progress(project_id)
 
         traces = self.load_traces(project_id)
         self.feature_repo.delete_features_by_project(project_id)
@@ -197,6 +331,7 @@ class FunctionalDecompositionService:
             )
             return
 
+        self._set_decomposition_status("Functional Decomposition: Building feature matrix...")
         X, all_functions = self.build_feature_matrix(traces)
 
         summarizer = SummarizationService(self.db)
@@ -206,6 +341,8 @@ class FunctionalDecompositionService:
         node_lookup = {n.id: n for n in db_nodes}
 
         method = (decomposition_method or self.DECOMP_METHOD_AGGLOMERATIVE).strip().lower()
+
+        self._set_decomposition_status("Functional Decomposition: Clustering functions...")
 
         if method == self.DECOMP_METHOD_GRAPH_COMMUNITY:
             self.graph_community_decomposition.run(
@@ -254,8 +391,10 @@ class FunctionalDecompositionService:
         self.graph_service.change_project_status(
             project_id,
             status="decomposing",
-            description="Trace Decomposition started...",
+            description="Trace Decomposition: Preprocessing trace data...",
         )
+
+        self._reset_trace_progress(project_id)
 
         traces = self.trace_service.get_project_traces(project_id)
         self.micro_features_repo.clear_project_decomposition(project_id, commit=True)
@@ -273,6 +412,7 @@ class FunctionalDecompositionService:
         db_nodes = self.graph_service.get_all_nodes(project_id)
         node_lookup = {n.id: n for n in db_nodes}
 
+        self._set_trace_status("Trace Decomposition: Decomposing traces...")
         self._save_project_trace_decomposition(
             project_id=project_id,
             summarizer=summarizer,
@@ -341,7 +481,34 @@ class FunctionalDecompositionService:
     ):
         traces = self.trace_service.get_project_traces(project_id)
 
-        for trace in traces:
+        total_traces = len(traces)
+
+        for index, trace in enumerate(traces, start=1):
+            trace_label = trace.name or f"Trace_{trace.id}"
+            self._set_trace_status(
+                f"Decomposing trace {index}/{total_traces} - {trace_label}"
+            )
+
+            def progress_callback(
+                phase: str,
+                done: int,
+                total: Optional[int],
+                segment_name: Optional[str] = None,
+                trace_label_snapshot: str = trace_label,
+                trace_index_snapshot: int = index,
+                trace_total_snapshot: int = total_traces,
+            ):
+                self._update_trace_progress(
+                    phase=phase,
+                    done=done,
+                    total=total,
+                    trace_label=trace_label_snapshot,
+                    segment_name=segment_name,
+                    allow_ai=allow_ai,
+                    trace_index=trace_index_snapshot,
+                    total_traces=trace_total_snapshot,
+                )
+
             trace_data = self.trace_service.get_trace_file(trace.id)
             decomposition_result = self.trace_decomposition.decompose_trace(
                 trace_data=trace_data,
@@ -350,6 +517,7 @@ class FunctionalDecompositionService:
                 allow_ai=allow_ai,
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
+                progress_callback=progress_callback,
                 pelt_penalty=pelt_penalty,
                 distance_threshold=distance_threshold,
             )

@@ -2,7 +2,7 @@ import hashlib
 import math
 import re
 from collections import Counter
-from typing import Any
+from typing import Any, Optional, Callable
 
 import numpy as np
 import ruptures as rpt
@@ -28,6 +28,7 @@ class TraceDecomposition:
         allow_ai: bool,
         node_lookup,
         collect_nodes_with_ancestors,
+        progress_callback: Optional[Callable[[str, int, Optional[int], Optional[str]], None]] = None,
         pelt_penalty: float | None = None,
         distance_threshold: float = 0.5,
     ):
@@ -46,20 +47,49 @@ class TraceDecomposition:
             pelt_penalty=pelt_penalty,
         )
 
+        micro_total = len(pelt_segments)
+        micro_done = 0
+
+        def advance_micro_progress(segment_name: Optional[str] = None):
+            nonlocal micro_done
+            if progress_callback is None or micro_total <= 0:
+                return
+
+            micro_done = min(micro_done + 1, micro_total)
+            progress_callback("micro", micro_done, micro_total, segment_name)
+
+        if progress_callback is not None and micro_total > 0:
+            progress_callback("micro", 0, micro_total, None)
+
         enriched_segments = self._enrich_segments(
             pelt_segments=pelt_segments,
             summarizer=summarizer,
             allow_ai=allow_ai,
             node_lookup=node_lookup,
             collect_nodes_with_ancestors=collect_nodes_with_ancestors,
+            progress_step=advance_micro_progress,
         )
+
+        merge_done = 0
+
+        def advance_merge_progress(segment_name: Optional[str] = None):
+            nonlocal merge_done
+            if progress_callback is None:
+                return
+
+            merge_done += 1
+            progress_callback("hierarchical", merge_done, None, segment_name)
 
         hierarchical_segments = self._build_adjacent_hierarchical_segments(
             enriched_segments,
             distance_threshold=distance_threshold,
             summarizer=summarizer,
             allow_ai=allow_ai,
+            progress_step=advance_merge_progress,
         )
+
+        if progress_callback is not None and merge_done > 0:
+            progress_callback("hierarchical", merge_done, merge_done, None)
 
         return {
             "micro_segments": enriched_segments,
@@ -105,6 +135,7 @@ class TraceDecomposition:
         allow_ai: bool,
         node_lookup,
         collect_nodes_with_ancestors,
+        progress_step: Optional[Callable[[Optional[str]], None]] = None,
     ):
         enriched_segments = []
 
@@ -141,6 +172,9 @@ class TraceDecomposition:
                     "steps": segment_steps,
                 }
             )
+
+            if progress_step is not None:
+                progress_step(segment_name)
 
         return enriched_segments
 
@@ -439,7 +473,14 @@ class TraceDecomposition:
 
         return vector
 
-    def _build_adjacent_hierarchical_segments(self, segments, distance_threshold: float, summarizer, allow_ai: bool):
+    def _build_adjacent_hierarchical_segments(
+        self,
+        segments,
+        distance_threshold: float,
+        summarizer,
+        allow_ai: bool,
+        progress_step: Optional[Callable[[Optional[str]], None]] = None,
+    ):
         if not segments:
             return []
         
@@ -478,7 +519,11 @@ class TraceDecomposition:
             clusters[best_merge_index] = merged_cluster
             del clusters[best_merge_index + 1]
 
+            if progress_step is not None:
+                progress_step(merged_cluster.get("name"))
+
         return clusters
+
     
     # def _build_segment_vector(self, segment):
     #     if isinstance(segment, dict):

@@ -248,6 +248,11 @@ class GraphCommunityDecomposition:
                     if ratio >= overlap_alpha:
                         feature_members[cid].add(node)
 
+        feature_count = sum(1 for members in feature_members.values() if members)
+        infra_count = 1 if infrastructure_nodes else 0
+        total_features = feature_count + infra_count
+        self.service.init_decomposition_progress(total_features, allow_ai)
+
         for cid, members in feature_members.items():
             if not members:
                 continue

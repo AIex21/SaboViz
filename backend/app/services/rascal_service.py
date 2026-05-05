@@ -4,8 +4,12 @@ import json
 import zipfile
 import shutil
 import tarfile
+import re
+import time
+from collections import deque
 from pathlib import Path
 from fastapi import HTTPException
+from typing import Callable, Optional
 
 from app.services.ingest_service import IngestService
 from app.core.database import SessionLocal
@@ -54,7 +58,11 @@ class RascalService:
 
         return project_dir
     
-    def run_parser_container(self, project_id: int):
+    def run_parser_container(
+        self,
+        project_id: int,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ):
         container = None
         try:
             volume_map = {
@@ -83,10 +91,41 @@ class RascalService:
                 volumes=volume_map
             )
 
+            progress_pattern = re.compile(r"Processed:\s*(\d+)\s*/\s*(\d+)")
+            log_tail = deque(maxlen=200)
+            last_processed = 0
+            last_report_at = 0.0
+
+            for raw in container.logs(stream=True, follow=True):
+                line = raw.decode('utf-8', errors='replace').strip()
+                if not line:
+                    continue
+
+                log_tail.append(line)
+                match = progress_pattern.search(line)
+                if not match or progress_callback is None:
+                    continue
+
+                processed = int(match.group(1))
+                total = int(match.group(2))
+                if total <= 0 or processed <= last_processed:
+                    continue
+
+                now = time.monotonic()
+                if (now - last_report_at) < 0.5:
+                    continue
+
+                last_processed = processed
+                last_report_at = now
+                try:
+                    progress_callback(processed, total)
+                except Exception:
+                    pass
+
             result = container.wait()
             
             if result['StatusCode'] != 0:
-                logs = container.logs().decode('utf-8')
+                logs = "\n".join(log_tail)
                 raise Exception(f"Parser failed with code {result['StatusCode']}.\nLogs:\n{logs[-500:]}")
             
             bits_m3, stat_m3 = container.get_archive("/app/models/composed/FullProject.json")
@@ -150,7 +189,15 @@ def run_full_analysis_pipeline(
         repo = GraphRepository(db)
         try:
             repo.change_project_status(project_id, "processing", "Running Static Analysis (Rascal)...")
-            json_path = rascal_service.run_parser_container(project_id)
+            def on_progress(processed: int, total: int):
+                percent = int((processed / total) * 100) if total else 0
+                repo.change_project_status(
+                    project_id,
+                    "processing",
+                    f"Parsing {processed}/{total} files ({percent}%)"
+                )
+
+            json_path = rascal_service.run_parser_container(project_id, progress_callback=on_progress)
             
             with open(json_path, 'r') as f:
                 m3_content = json.load(f)

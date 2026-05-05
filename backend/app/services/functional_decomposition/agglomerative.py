@@ -60,6 +60,8 @@ class AgglomerativeDecomposition:
         X_weighted, idf_scores = self._frequency_filtering(X)
         clusters = self._cluster_traces(X_weighted, distance_threshold)
 
+        self.service.init_decomposition_progress(len(clusters), allow_ai)
+
         for _, indices in clusters.items():
             avg_score = float(np.mean(idf_scores[indices]))
             is_infrastructure = avg_score < infrastructure_threshold

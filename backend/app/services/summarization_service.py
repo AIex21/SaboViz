@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from sqlalchemy.orm import Session
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List, Set, Optional
 
 from app.models.graph import Node, Edge
 from app.services.graph_service import GraphService
@@ -35,6 +35,9 @@ class SummarizationService:
         self.node_states: Dict[str, str] = {}
 
         self.shallow_summaries: Dict[str, Dict[str, Any]] = {}
+        self.summary_total = 0
+        self.summary_done = 0
+        self.active_project_id = None
 
     def _non_root_style_constraints(self) -> str:
         return (
@@ -46,6 +49,38 @@ class SummarizationService:
             "- Start directly with the node behavior (verb + object), not with product context.\n"
         )
 
+    def _should_summarize(self, node: Node) -> bool:
+        labels = set(node.labels or [])
+        if NODE_VARIABLE in labels:
+            return False
+
+        summarizable_labels = {
+            NODE_OPERATION,
+            NODE_TYPE,
+            NODE_SCOPE,
+            NODE_FILE,
+            NODE_FOLDER,
+            NODE_PROJECT,
+        }
+
+        return bool(labels & summarizable_labels)
+
+    def _update_progress(self, node: Optional[Node] = None) -> None:
+        if not self.active_project_id or self.summary_total <= 0:
+            return
+        percent = int((self.summary_done / self.summary_total) * 100) if self.summary_total else 0
+
+        message = f"Summarizing: {self.summary_done}/{self.summary_total} ({percent}%)"
+        if node is not None:
+            name = node.properties.get("simpleName", node.id)
+            message = f"{message} - {name}"
+
+        self.graph_service.change_project_status(
+            self.active_project_id,
+            "summarizing",
+            message
+        )
+
     def _prepare_context(self, project_id: int):
         self.nodes_map = {}
         self.outbound_edges = {}
@@ -53,6 +88,9 @@ class SummarizationService:
         self.node_states = {}
         self.shallow_summaries = {}
         self.snippets = {}
+        self.summary_total = 0
+        self.summary_done = 0
+        self.active_project_id = project_id
 
         nodes = self.graph_service.get_all_nodes(project_id)
         edges = self.graph_service.get_all_edges(project_id)
@@ -70,6 +108,10 @@ class SummarizationService:
             if e.source_id in self.outbound_edges:
                 self.outbound_edges[e.source_id].append(e)
 
+        self.summary_total = sum(
+            1 for node in self.nodes_map.values() if self._should_summarize(node)
+        )
+
         snippets_path = HOST_DATA_PATH / str(project_id) / FULL_PROJECT_SNIPPETS_FILENAME
         if snippets_path.exists():
             with open(snippets_path, 'r', encoding='utf-8') as f:
@@ -82,6 +124,7 @@ class SummarizationService:
 
             self.graph_service.change_project_status(project_id, "summarizing", "Summarizing architecture with AI...")
             self._prepare_context(project_id)
+            self._update_progress()
 
             roots = self.graph_service.get_project_roots(project_id)
 
@@ -169,6 +212,9 @@ class SummarizationService:
         self.graph_service.update_node(node)
 
         self.node_states[node_id] = "SUMMARIZED"
+        if self._should_summarize(node):
+            self.summary_done += 1
+            self._update_progress(node)
 
         return summary
     
