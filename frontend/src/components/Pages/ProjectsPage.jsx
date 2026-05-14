@@ -219,10 +219,10 @@ const ProjectsPage = () => {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
 
-            showToast("Static graph exported successfully.", "success");
+            showToast("Graph exported successfully.", "success");
             setSelectedProjectForActions(null);
         } catch (error) {
-            showToast("Failed to export static graph.", "error");
+            showToast("Failed to export graph.", "error");
         }
     };
 

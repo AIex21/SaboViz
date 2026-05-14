@@ -52,8 +52,8 @@ const ProjectActionsModal = ({
                         </button>
 
                         <button style={styles.actionTile} onClick={onExportStatic}>
-                            <div style={styles.tileTitle}>Export Static Graph</div>
-                            <div style={styles.tileDescription}>Download nodes and edges only, so you can re-import without parsing source files.</div>
+                            <div style={styles.tileTitle}>Export Graph</div>
+                            <div style={styles.tileDescription}>Download the entire graph, so you can re-import without processing.</div>
                         </button>
                     </div>
                 </div>

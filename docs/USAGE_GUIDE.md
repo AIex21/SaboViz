@@ -71,7 +71,7 @@ Once your static project is ready, you can manage your dynamic data and trigger 
 * **Extract Features:** Starts the functional decomposition process. You can set custom thresholds to cluster entities based on their runtime interactions, automatically identifying high-level system features.
 * **Trace Decomposition:** Splits raw, chronological traces into distinct micro-features and coherent execution flow segments to make them readable.
 * **Run Summarization:** Generates AI summaries for the entire graph (useful if you did not enable auto-summarization during project creation).
-* **Export Static Graph:** Downloads the currently mapped nodes and edges as a file. This allows you to re-import the project later without needing to re-parse the heavy source code files.
+* **Export Graph:** Downloads the current state of the graph as a file. This allows you to re-import the project later without needing to re-do the heavy processing.
 
 ![Project Actions Button](assets/project-actions-button.png)
 *(Image: Pointing out the Actions button on the project card.)*

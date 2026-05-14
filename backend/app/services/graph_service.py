@@ -1,8 +1,12 @@
 import json
+from pathlib import Path
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Dict, Any
+from app.repositories.feature_repo import FeatureRepository
 from app.repositories.graph_repo import GraphRepository
+from app.repositories.micro_features_repo import MicroFeaturesRepository
+from app.repositories.trace_repo import TraceRepository
 from app.services.rascal_service import RascalService
 from app.core.storage_paths import HOST_DATA_PATH, FULL_PROJECT_SNIPPETS_FILENAME
 from app.core.database import SessionLocal
@@ -93,6 +97,7 @@ class GraphService:
             return None
 
         nodes = self.repo.get_all_nodes(project_id)
+        nodes = self.repo.attach_features_to_nodes(project_id, nodes)
         edges = self.repo.get_all_edges(project_id)
 
         exported_nodes = []
@@ -106,6 +111,7 @@ class GraphService:
                     "ancestors": node.ancestors or [],
                     "hasChildren": bool(node.hasChildren),
                     "ai_summary": node.ai_summary,
+                    "participating_features": getattr(node, "participating_features", []),
                 }
             })
 
@@ -130,9 +136,114 @@ class GraphService:
             except Exception:
                 snippets = {}
 
+        feature_repo = FeatureRepository(self.repo.db)
+        trace_repo = TraceRepository(self.repo.db)
+        micro_features_repo = MicroFeaturesRepository(self.repo.db)
+
+        exported_features = []
+        features = feature_repo.get_features_by_project(project_id)
+        for feature in features:
+            exported_features.append({
+                "id": feature.id,
+                "project_id": feature.project_id,
+                "name": feature.name,
+                "description": feature.description,
+                "category": feature.category,
+                "score": feature.score,
+                "node_ids": [node.id for node in feature.nodes],
+            })
+
+        def _dt_to_iso(value: datetime | None) -> str | None:
+            if not value:
+                return None
+            return value.isoformat()
+
+        exported_traces = []
+        traces = trace_repo.get_traces_by_project_id(project_id)
+        for trace in traces:
+            trace_file = None
+            trace_file_error = None
+            if trace.trace_seq_path:
+                trace_path = Path(trace.trace_seq_path)
+                if trace_path.exists():
+                    try:
+                        with open(trace_path, "r", encoding="utf-8") as trace_file_handle:
+                            trace_file = json.load(trace_file_handle)
+                    except Exception as exc:
+                        trace_file_error = f"Failed to read trace file '{trace_path.name}': {exc}"
+                else:
+                    trace_file_error = f"Trace file missing from disk: {trace_path.name}"
+
+            micro_features = micro_features_repo.get_micro_features_by_trace(trace.id)
+            micro_feature_flows = micro_features_repo.get_micro_feature_flows_by_trace(trace.id)
+            hierarchical_clusters = micro_features_repo.get_hierarchical_clusters_by_trace(trace.id)
+
+            exported_traces.append({
+                "id": trace.id,
+                "project_id": trace.project_id,
+                "name": trace.name,
+                "description": trace.description,
+                "created_at": _dt_to_iso(trace.created_at),
+                "total_steps": trace.total_steps,
+                "resolved_steps": trace.resolved_steps,
+                "ambiguous_steps": trace.ambiguous_steps,
+                "unresolved_steps": trace.unresolved_steps,
+                "trace_file": trace_file,
+                "trace_file_error": trace_file_error,
+                "micro_features": [
+                    {
+                        "id": row.id,
+                        "project_id": row.project_id,
+                        "trace_id": row.trace_id,
+                        "sequence_order": row.sequence_order,
+                        "name": row.name,
+                        "description": row.description,
+                        "category": row.category,
+                        "components": row.components or [],
+                        "step_count": row.step_count,
+                        "start_step": row.start_step,
+                        "end_step": row.end_step,
+                        "created_at": _dt_to_iso(row.created_at),
+                    }
+                    for row in micro_features
+                ],
+                "micro_feature_flows": [
+                    {
+                        "id": row.id,
+                        "project_id": row.project_id,
+                        "trace_id": row.trace_id,
+                        "source_micro_feature_id": row.source_micro_feature_id,
+                        "target_micro_feature_id": row.target_micro_feature_id,
+                        "sequence_order": row.sequence_order,
+                        "created_at": _dt_to_iso(row.created_at),
+                    }
+                    for row in micro_feature_flows
+                ],
+                "hierarchical_clusters": [
+                    {
+                        "id": row.id,
+                        "project_id": row.project_id,
+                        "trace_id": row.trace_id,
+                        "parent_cluster_id": row.parent_cluster_id,
+                        "left_child_cluster_id": row.left_child_cluster_id,
+                        "right_child_cluster_id": row.right_child_cluster_id,
+                        "sequence_order": row.sequence_order,
+                        "hierarchy_level": row.hierarchy_level,
+                        "name": row.name,
+                        "description": row.description,
+                        "member_micro_feature_ids": row.member_micro_feature_ids or [],
+                        "member_count": row.member_count,
+                        "start_step": row.start_step,
+                        "end_step": row.end_step,
+                        "created_at": _dt_to_iso(row.created_at),
+                    }
+                    for row in hierarchical_clusters
+                ],
+            })
+
         return {
-            "format": "saboviz-static-graph",
-            "version": "1.0",
+            "format": "saboviz-graph",
+            "version": "1.1",
             "project": {
                 "name": project.name,
                 "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -142,4 +253,6 @@ class GraphService:
                 "edges": exported_edges,
             },
             "snippets": snippets,
+            "features": exported_features,
+            "traces": exported_traces,
         }
