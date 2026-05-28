@@ -17,6 +17,9 @@ SaboViz parses standard C++ syntax. It cannot directly parse custom definition f
 ## 2. Preparing Dynamic Data (Execution Traces)
 Static dependencies only tell half the story. To capture what the program actual does at runtime, SaboViz requires execution traces.
 
+> 💡 **No Traces? Use TraceForge**
+> If your C++ project does not currently generate execution traces, we highly recommend using **[TraceForge](https://github.com/AIex21/trace-forge)**. TraceForge is an automated instrumentation tool, implemented by us, that intelligently injects a lightweight logger into your codebase to automatically output `.log` files in the exact format required by SaboViz.
+
 ### What Should a Trace Capture?
 To accurately reconstruct the architecture, a trace must represent a **distinct service or feature of the system**. We define a single trace as the complete execution log of a single System Scenario, Use-Case, or End-to-End Feature. To obtain this, utilize **System Integration Tests** or **Manual Execution Scenarios**.
 
