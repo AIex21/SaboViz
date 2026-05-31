@@ -35,6 +35,19 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    logs = relationship("ProjectLog", back_populates="project", cascade="all, delete-orphan")
+
+class ProjectLog(Base):
+    __tablename__ = "project_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), index=True, nullable=False)
+    status = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    project = relationship("Project", back_populates="logs")
+
 class Node(Base):
     __tablename__ = "nodes"
     __table_args__ = (

@@ -318,6 +318,8 @@ class FunctionalDecompositionService:
             "Functional Decomposition: Decomposing traces..."
         )
 
+        self._reset_trace_progress(project_id)
+
         self.micro_features_repo.clear_project_decomposition(project_id, commit=False)
 
         self._save_project_trace_decomposition(
@@ -437,7 +439,7 @@ class FunctionalDecompositionService:
         for index, trace in enumerate(traces, start=1):
             trace_label = trace.name or f"Trace_{trace.id}"
             self._set_trace_status(
-                f"Decomposing trace {index}/{total_traces} - {trace_label}"
+                f"Functional Decomposition: Decomposing trace {index}/{total_traces} - {trace_label}"
             )
 
             def progress_callback(

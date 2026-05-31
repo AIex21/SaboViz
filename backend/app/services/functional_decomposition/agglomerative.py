@@ -56,7 +56,7 @@ class AgglomerativeDecomposition:
 
         return clusters
     
-    def _automatic_distance_threhold(self, X: np.ndarray) -> float:
+    def _automatic_distance_threshold(self, X: np.ndarray) -> float:
         # Build the full hierarchy once, inspect the merge distances, and cut before the largest meaningful jump.
         function_count = X.shape[0]
 

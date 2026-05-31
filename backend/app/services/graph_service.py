@@ -256,3 +256,6 @@ class GraphService:
             "features": exported_features,
             "traces": exported_traces,
         }
+    
+    def get_project_logs(self, project_id: int, limit: int = 200):
+        return self.repo.get_project_logs(project_id, limit)

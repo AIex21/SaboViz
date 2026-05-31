@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import not_, text
-from app.models.graph import Project, Node, Edge
+from app.models.graph import Project, ProjectLog, Node, Edge
 
 class GraphRepository:
     def __init__(self, db: Session):
@@ -14,12 +14,33 @@ class GraphRepository:
     
     def change_project_status(self, project_id: int, status: str, description: str = None):
         project = self.db.query(Project).filter(Project.id == project_id).first()
+
         if project:
+            old_status = project.status
+            old_description = project.description
+
             project.status = status
+
             if description is not None:
                 project.description = description
+
+            effective_description = project.description
+
+            should_log = (
+                old_status != project.status
+                or (description is not None and old_description != effective_description)
+            )
+
+            if should_log:
+                self.db.add(ProjectLog(
+                    project_id=project_id,
+                    status=project.status,
+                    description=effective_description
+                ))
+
             self.db.commit()
             self.db.refresh(project)
+        
         return project
     
     def create_project(
@@ -38,6 +59,15 @@ class GraphRepository:
             run_summarization=run_summarization
         )
         self.db.add(project)
+        self.db.flush()
+
+        if status != 'ready' or description:
+            self.db.add(ProjectLog(
+                project_id=project.id,
+                status=status,
+                description=description
+            ))
+
         self.db.commit()
         self.db.refresh(project)
         return project
@@ -352,3 +382,16 @@ class GraphRepository:
             node.participating_features = feature_map.get(node.id, [])
 
         return nodes
+
+    def get_project_logs(self, project_id: int, limit: int = 200):
+        limit = max(1, min(int(limit or 200), 500))
+
+        logs = (
+            self.db.query(ProjectLog)
+            .filter(ProjectLog.project_id == project_id)
+            .order_by(ProjectLog.created_at.desc(), ProjectLog.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return list(reversed(logs))

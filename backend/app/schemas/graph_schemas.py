@@ -41,6 +41,16 @@ class ProjectSummary(BaseModel):
     class Config:
         from_attributes = True
 
+class ProjectLogEntry(BaseModel):
+    id: int
+    project_id: int
+    status: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 class GraphData(BaseModel):
     nodes: List[NodeResponse]
     edges: List[EdgeResponse]

@@ -36,6 +36,14 @@ export const projectApi = {
         return response.data;
     },
 
+    getProjectLogs: async (projectId, limit = 200) => {
+        const response = await api.get(`/projects/${projectId}/logs`, {
+            params: { limit }
+        });
+
+        return response.data;
+    },
+
     exportStaticProject: async (projectId) => {
         const response = await api.get(`/projects/${projectId}/export-static`);
         return response.data;

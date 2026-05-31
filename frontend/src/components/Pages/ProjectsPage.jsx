@@ -11,6 +11,7 @@ import DecompositionModal from '../Panel/DecompositionModal'
 import TraceDecompositionModal from '../Panel/TraceDecompositionModal';
 import CreateProjectOptionsModal from '../Panel/CreateProjectOptionsModal';
 import ProjectActionsModal from '../Panel/ProjectActionsModal';
+import ProjectLogModal from '../Panel/ProjectLogModal';
 import { useToast } from '../../context/ToastContext';
 
 const ProjectsPage = () => {
@@ -29,6 +30,7 @@ const ProjectsPage = () => {
     const [selectedProjectForTraceDecomp, setSelectedProjectForTraceDecomp] = useState(null);
     const [isCreateOptionsModalOpen, setIsCreateOptionsModalOpen] = useState(false);
     const [selectedProjectForActions, setSelectedProjectForActions] = useState(null);
+    const [selectedProjectForLogs, setSelectedProjectForLogs] = useState(null);
 
     useEffect(() => { 
         loadProjects(); 
@@ -187,6 +189,11 @@ const ProjectsPage = () => {
         setSelectedProjectForActions(project);
     };
 
+    const handleOpenLogModal = (e, project) => {
+        e.stopPropagation();
+        setSelectedProjectForLogs(project);
+    }
+
     const handleRerunSummarization = async (project) => {
         try {
             await projectApi.rerunSummarization(project.id);
@@ -322,8 +329,7 @@ const ProjectsPage = () => {
                             key={p.id} 
                             style={{
                                 ...styles.card, 
-                                opacity: (p.status === 'processing' || p.status === 'decomposing' || p.status === 'summarizing') ? 0.6 : 1,
-                                pointerEvents: p.status === 'processing' ? 'none' : 'auto'
+                                opacity: (p.status === 'processing' || p.status === 'decomposing' || p.status === 'summarizing') ? 0.6 : 1
                             }} onClick={() => (p.status === 'ready' || p.status === 'summarizing') && navigate(`/project/${p.id}`)}>
                             <div style={styles.cardHeader}>
                                 <div style={{
@@ -344,7 +350,7 @@ const ProjectsPage = () => {
                             <div style={styles.cardBody}>
                                 <h2 style={styles.cardTitle}>{p.name}</h2>
 
-                                <div style={{marginTop: '8px', display:'flex', alignItems:'center', gap: '10px'}}>
+                                <div style={{marginTop: '8px', display:'flex', alignItems:'center', gap: '10px', flexWrap: 'wrap'}}>
                                     <span style={{
                                         ...styles.statusBadge,
                                         backgroundColor: getStatusColor(p.status) + '20',
@@ -359,6 +365,14 @@ const ProjectsPage = () => {
                                         p.status === 'unresolved' ? '⚠ ACTION NEEDED' :
                                         '● READY'}
                                     </span>
+
+                                    <button
+                                        onClick={(e) => handleOpenLogModal(e, p)}
+                                        style={styles.logBtn}
+                                        title="View project activity log"
+                                    >
+                                        Logs
+                                    </button>
                                 </div>
 
                                 {p.description && (
@@ -465,6 +479,13 @@ const ProjectsPage = () => {
                     projectName={projectName}
                     onClose={() => setIsCreateOptionsModalOpen(false)}
                     onConfirm={handleConfirmUploadOptions}
+                />
+            )}
+
+            {selectedProjectForLogs && (
+                <ProjectLogModal
+                    project={selectedProjectForLogs}
+                    onClose={() => setSelectedProjectForLogs(null)}
                 />
             )}
 
@@ -773,6 +794,18 @@ const styles = {
         gap: '4px',
         transition: 'all 0.2s',
         ':hover': { background: 'rgba(255,255,255,0.1)' }
+    },
+    logBtn: {
+        background: 'rgba(255,255,255,0.06)',
+        border: `1px solid ${THEME.border}`,
+        color: THEME.textMuted,
+        height: '24px',
+        padding: '0 9px',
+        borderRadius: '999px',
+        fontSize: '11px',
+        fontWeight: '700',
+        cursor: 'pointer',
+        transition: 'all 0.2s'
     }
 };
 

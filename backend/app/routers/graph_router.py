@@ -10,7 +10,7 @@ from app.services.graph_service import GraphService
 from app.services.ingest_service import IngestService
 from app.services.func_decomp_service import FunctionalDecompositionService
 from app.services.rascal_service import RascalService, run_full_analysis_pipeline
-from app.schemas.graph_schemas import NodeResponse, EdgeResponse, ProjectSummary, GraphData
+from app.schemas.graph_schemas import NodeResponse, EdgeResponse, ProjectSummary, ProjectLogEntry, GraphData
 from app.services.summarization_service import SummarizationService
 
 router = APIRouter(prefix="/api", tags=["Graph"])
@@ -39,6 +39,19 @@ def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+@router.get("/projects/{project_id}/logs", response_model=List[ProjectLogEntry])
+def get_project_logs(
+    project_id: int,
+    limit: int = Query(200, ge=1, le=500),
+    service: GraphService = Depends(get_service)
+):
+    project = service.get_project_by_id(project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    return service.get_project_logs(project_id, limit)
 
 @router.delete("/projects/{project_id}")
 def delete_project(
