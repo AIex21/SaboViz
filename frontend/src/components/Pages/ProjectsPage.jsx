@@ -220,7 +220,7 @@ const ProjectsPage = () => {
             const safeName = (project.name || `project-${project.id}`).replace(/[^a-zA-Z0-9-_]+/g, '_');
 
             a.href = url;
-            a.download = `${safeName}.static-graph.json`;
+            a.download = `${safeName}.graph.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
