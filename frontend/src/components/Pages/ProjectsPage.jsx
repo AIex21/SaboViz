@@ -226,25 +226,9 @@ const ProjectsPage = () => {
         }
     };
 
-    const handleConfirmDecomposition = async (
-        projectId,
-        distThreshold,
-        infraThreshold,
-        useAi,
-        decompositionMethod,
-        overlapAlpha,
-        leidenResolution
-    ) => {
+    const handleConfirmDecomposition = async (projectId, useAi) => {
         try {
-            await projectApi.startDecomposition(
-                projectId,
-                distThreshold,
-                infraThreshold,
-                useAi,
-                decompositionMethod,
-                overlapAlpha,
-                leidenResolution
-            );
+            await projectApi.startDecomposition(projectId, useAi);
             
             showToast("Functional decomposition started.", "info");
 
@@ -499,10 +483,6 @@ const ProjectsPage = () => {
                     }}
                     onExtractFeatures={() => {
                         setSelectedProjectForDecomp(selectedProjectForActions);
-                        setSelectedProjectForActions(null);
-                    }}
-                    onTraceDecomposition={() => {
-                        setSelectedProjectForTraceDecomp(selectedProjectForActions);
                         setSelectedProjectForActions(null);
                     }}
                     onExportStatic={() => handleExportStatic(selectedProjectForActions)}

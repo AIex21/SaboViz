@@ -12,7 +12,6 @@ from app.services.graph_service import GraphService
 from app.services.summarization_service import SummarizationService
 from app.services.trace_service import TraceService
 from .functional_decomposition.agglomerative import AgglomerativeDecomposition
-from .functional_decomposition.graph_community import GraphCommunityDecomposition
 from .trace_decomposition.trace_decomposition import TraceDecomposition
 
 
@@ -24,17 +23,8 @@ class FunctionalDecompositionService:
         self.trace_service = TraceService(db)
         self.graph_service = GraphService(db)
 
-        self.DISTANCE_THRESHOLD = 0.4
-        self.INFRASTRUCTURE_THRESHOLD = 0.3
-        self.OVERLAP_ALPHA = 0.8
-        self.MIN_COEXEC_WEIGHT = 0.2
-        self.LEIDEN_RESOLUTION = 1.8
-        self.DECOMP_METHOD_AGGLOMERATIVE = "agglomerative"
-        self.DECOMP_METHOD_GRAPH_COMMUNITY = "graph_community"
-
         self.trace_decomposition = TraceDecomposition(self.graph_service)
         self.agglomerative_decomposition = AgglomerativeDecomposition(self)
-        self.graph_community_decomposition = GraphCommunityDecomposition(self)
 
         self.decomp_project_id: Optional[int] = None
         self.decomp_total = 0
@@ -305,73 +295,66 @@ class FunctionalDecompositionService:
     def run_functional_decomposition(
         self,
         project_id: int,
-        distance_threshold: float = 0.4,
-        infrastructure_threshold: float = 0.3,
         use_ai: bool = True,
-        decomposition_method: str = "agglomerative",
-        overlap_alpha: float = 0.8,
-        leiden_resolution: float = 1.8,
     ):
         self.graph_service.change_project_status(
             project_id,
             status="decomposing",
-            description="Functional Decomposition: Preprocessing traces...",
+            description="Functional Decomposition: Preparing trace decomposition...",
         )
 
         self._reset_decomposition_progress(project_id)
 
-        traces = self.load_traces(project_id)
-        self.feature_repo.delete_features_by_project(project_id)
-
-        if not traces:
-            self.graph_service.change_project_status(
-                project_id,
-                status="ready",
-                description="Functional Decomposition completed. No traces with executable operations were found.",
-            )
-            return
-
-        self._set_decomposition_status("Functional Decomposition: Building feature matrix...")
-        X, all_functions = self.build_feature_matrix(traces)
-
         summarizer = SummarizationService(self.db)
         is_llm_enabled = summarizer.llm.is_enabled
         allow_ai = use_ai and is_llm_enabled
+
         db_nodes = self.graph_service.get_all_nodes(project_id)
         node_lookup = {n.id: n for n in db_nodes}
 
-        method = (decomposition_method or self.DECOMP_METHOD_AGGLOMERATIVE).strip().lower()
+        self.feature_repo.delete_features_by_project(project_id) 
 
-        self._set_decomposition_status("Functional Decomposition: Clustering functions...")
+        self._set_decomposition_status(
+            "Functional Decomposition: Decomposing traces..."
+        )
 
-        if method == self.DECOMP_METHOD_GRAPH_COMMUNITY:
-            self.graph_community_decomposition.run(
-                project_id=project_id,
-                traces=traces,
-                X=X,
-                all_functions=all_functions,
-                summarizer=summarizer,
-                allow_ai=allow_ai,
-                node_lookup=node_lookup,
-                overlap_alpha=overlap_alpha,
-                leiden_resolution=leiden_resolution,
+        self.micro_features_repo.clear_project_decomposition(project_id, commit=False)
+
+        self._save_project_trace_decomposition(
+            project_id=project_id,
+            summarizer=summarizer,
+            allow_ai=allow_ai,
+            node_lookup=node_lookup,
+        )
+
+        self._set_decomposition_status(
+            "Functional Decomposition: Building feature matrix..."
+        )
+
+        execution_units = self._load_execution_units_from_trace_decomposition(project_id)
+
+        if not execution_units:
+            self.graph_service.change_project_status(
+                project_id,
+                status="ready",
+                description="Functional Decomposition completed. No execution units could be extracted from trace decomposition.",
             )
-        elif method == self.DECOMP_METHOD_AGGLOMERATIVE:
-            self.agglomerative_decomposition.run(
-                project_id=project_id,
-                X=X,
-                all_functions=all_functions,
-                summarizer=summarizer,
-                allow_ai=allow_ai,
-                node_lookup=node_lookup,
-                distance_threshold=distance_threshold,
-                infrastructure_threshold=infrastructure_threshold,
-            )
-        else:
-            raise ValueError(
-                f"Unsupported decomposition_method '{decomposition_method}'. "
-                f"Use '{self.DECOMP_METHOD_AGGLOMERATIVE}' or '{self.DECOMP_METHOD_GRAPH_COMMUNITY}'."
-            )
+            return
+        
+        X, all_functions = self.build_feature_matrix(execution_units)
+
+        self._set_decomposition_status(
+            "Functional Decomposition: Clustering features..."
+        )
+
+        self.agglomerative_decomposition.run(
+            project_id=project_id,
+            X=X,
+            all_functions=all_functions,
+            summarizer=summarizer,
+            allow_ai=allow_ai,
+            node_lookup=node_lookup,
+        )
 
         self.feature_repo.commit()
 
@@ -623,3 +606,66 @@ class FunctionalDecompositionService:
                 member_ids.append(row.id)
 
         return sorted(set(member_ids))
+
+    def _load_execution_units_from_trace_decomposition(self, project_id: int):
+        traces = self.trace_service.get_project_traces(project_id)
+
+        execution_units = []
+
+        for trace in traces:
+            micro_features = self.micro_features_repo.get_micro_features_by_trace(trace.id)
+            clusters = self.micro_features_repo.get_hierarchical_clusters_by_trace(trace.id)
+
+            micro_by_id = {
+                micro_feature.id: micro_feature
+                for micro_feature in micro_features
+            }
+
+            top_level_clusters = [
+                cluster
+                for cluster in clusters
+                if cluster.parent_cluster_id is None
+            ]
+
+            # Fallback: if something went wrong and no top-level cluster exists, treat the whole trace as one execution unit.
+            if not top_level_clusters and micro_features:
+                functions = set()
+
+                for micro_feature in micro_features:
+                    for component in micro_feature.components or []:
+                        functions.add(component)
+
+                if functions:
+                    execution_units.append({
+                        "trace_id": trace.id,
+                        "trace_name": trace.name,
+                        "execution_unit_id": f"{trace.id}:full",
+                        "functions": functions,
+                    })
+                
+                continue
+
+            for index, cluster in enumerate(top_level_clusters, start=1):
+                functions = set()
+
+                for micro_feature_id in cluster.member_micro_feature_ids or []:
+                    micro_feature = micro_by_id.get(micro_feature_id)
+
+                    if not micro_feature:
+                        continue
+
+                    for component in micro_feature.components or []:
+                        functions.add(component)
+
+                if not functions:
+                    continue
+
+                execution_units.append({
+                    "trace_id": trace.id,
+                    "trace_name": trace.name,
+                    "execution_unit_id": f"{trace.id}:episode:{cluster.id}",
+                    "episode_index": index,
+                    "functions": functions,
+                })
+
+        return execution_units
