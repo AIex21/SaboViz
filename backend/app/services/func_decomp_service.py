@@ -13,7 +13,7 @@ from app.services.summarization_service import SummarizationService
 from app.services.trace_service import TraceService
 from .functional_decomposition.agglomerative import AgglomerativeDecomposition
 from .functional_decomposition.graph_community import GraphCommunityDecomposition
-from .functional_decomposition.trace_decomp import TraceDecomposition
+from .trace_decomposition.trace_decomposition import TraceDecomposition
 
 
 class FunctionalDecompositionService:
@@ -385,8 +385,6 @@ class FunctionalDecompositionService:
         self,
         project_id: int,
         use_ai: bool = True,
-        pelt_penalty: float | None = None,
-        distance_threshold: float = 0.5,
     ):
         self.graph_service.change_project_status(
             project_id,
@@ -418,8 +416,6 @@ class FunctionalDecompositionService:
             summarizer=summarizer,
             allow_ai=allow_ai,
             node_lookup=node_lookup,
-            pelt_penalty=pelt_penalty,
-            distance_threshold=distance_threshold,
         )
 
         self.db.commit()
@@ -429,32 +425,6 @@ class FunctionalDecompositionService:
             status="ready",
             description="Trace Decomposition successfully completed.",
         )
-
-    def decompose_traces(self, project_id: int, use_ai: bool = True, pelt_penalty: float | None = None, distance_threshold: float = 0.5):
-        traces = self.trace_service.get_project_traces(project_id)
-
-        segments_per_trace = {}
-
-        summarizer = SummarizationService(self.db)
-        allow_ai = use_ai and summarizer.llm.is_enabled
-
-        db_nodes = self.graph_service.get_all_nodes(project_id)
-        node_lookup = {node.id: node for node in db_nodes}
-
-        for trace in traces:
-            trace_data = self.trace_service.get_trace_file(trace.id)
-            segments_per_trace[trace.name] = self.trace_decomposition.decompose_trace(
-                trace_data=trace_data,
-                project_id=project_id,
-                summarizer=summarizer,
-                allow_ai=allow_ai,
-                node_lookup=node_lookup,
-                collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
-                pelt_penalty=pelt_penalty,
-                distance_threshold=distance_threshold,
-            )
-
-        return segments_per_trace
 
     def get_trace_micro_features(self, trace_id: int):
         return self.micro_features_repo.get_micro_features_by_trace(trace_id)
@@ -476,8 +446,6 @@ class FunctionalDecompositionService:
         summarizer,
         allow_ai: bool,
         node_lookup,
-        pelt_penalty: float | None = None,
-        distance_threshold: float = 0.5,
     ):
         traces = self.trace_service.get_project_traces(project_id)
 
@@ -518,8 +486,6 @@ class FunctionalDecompositionService:
                 node_lookup=node_lookup,
                 collect_nodes_with_ancestors=self.collect_nodes_with_ancestors,
                 progress_callback=progress_callback,
-                pelt_penalty=pelt_penalty,
-                distance_threshold=distance_threshold,
             )
             micro_segments = decomposition_result.get("micro_segments", [])
             hierarchical_clusters = decomposition_result.get("hierarchical_clusters", [])
