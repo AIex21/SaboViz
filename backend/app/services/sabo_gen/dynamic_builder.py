@@ -2,6 +2,7 @@ import json
 from sqlalchemy.orm import Session
 from app.services.sabo_gen.config import *
 from app.services.graph_service import GraphService
+from app.services.sabo_gen.signature_utils import normalized_signature_parameters, signatures_match
 
 class DynamicGraphBuilder:
     def __init__(self, trace_sequence, project_id: int, db: Session):
@@ -43,10 +44,27 @@ class DynamicGraphBuilder:
                 return True
 
         return False
+    
+    def _candidate_matches_signature(self, candidate, signature_parameters) -> bool:
+        if not isinstance(candidate, dict):
+            return False
+        
+        if not candidate.get("signatureKnown", False):
+            return False
 
-    def _resolve_operation_id(self, function_name: str, scope_qualifiers=None):
+        candidate_parameters = candidate.get("signatureParameters", [])
+
+        if candidate_parameters is None:
+            candidate_parameters = []
+
+        return signatures_match(signature_parameters, candidate_parameters)
+
+    def _resolve_operation_id(self, function_name: str, scope_qualifiers=None, signature_parameters=None, signature_known=False):
         matches = self.static_lookup.get(function_name, [])
+
         scope_qualifiers = scope_qualifiers or []
+        signature_parameters = normalized_signature_parameters(signature_parameters or [])
+        signature_known = bool(signature_known)
 
         # Backward compatibility in case map still contains single string IDs.
         if isinstance(matches, str):
@@ -54,10 +72,19 @@ class DynamicGraphBuilder:
 
         # Backward compatibility for old lookup shape.
         normalized = []
+
         for match in matches:
             if isinstance(match, str):
-                normalized.append({"id": match, "ancestorNames": [], "ancestorTokens": []})
+                normalized.append({
+                    "id": match, 
+                    "ancestorNames": [], 
+                    "ancestorTokens": [],
+                    "signatureParameters": [],
+                    "signatureKnown": False
+                    })
             elif isinstance(match, dict):
+                match.setdefault("signatureParameters", [])
+                match.setdefault("signatureKnown", False)
                 normalized.append(match)
 
         matches = normalized
@@ -68,27 +95,46 @@ class DynamicGraphBuilder:
         if len(matches) > 1:
             narrowed = matches
 
-            # Use qualifiers from nearest scope to farthest: A::B::func => B then A.
+            # First use scope qualifiers from nearest scope to farthest:
+            # A::B::funct => B, then A
             for qualifier in reversed(scope_qualifiers):
                 qualifier_matches = [
                     candidate for candidate in narrowed
                     if self._candidate_matches_qualifier(candidate, qualifier)
                 ]
 
-                # No matches means this qualifier provides no useful signal.
+                # No matches means this qualifier provides no useful signal
                 if not qualifier_matches:
                     continue
 
-                # If qualifier matches all candidates, it doesn't disambiguate.
+                # If qualifier matches all candidates, it does not disambiguate
                 if len(qualifier_matches) == len(narrowed):
                     continue
 
                 narrowed = qualifier_matches
+
                 if len(narrowed) == 1:
                     return narrowed[0].get("id"), "resolved"
+            
+            # Then use signature parameters to disambiguate overloaded functions
+            if signature_known:
+                signature_matches = [
+                    candidate for candidate in narrowed
+                    if self._candidate_matches_signature(candidate, signature_parameters)
+                ]
 
+                if len(signature_matches) == 1:
+                    return signature_matches[0].get("id"), "resolved"
+                
+                # If the signature filters out only some candidates, keep the narrowed set
+                if 0 < len(signature_matches) < len(narrowed):
+                    narrowed = signature_matches
+                
+                if len(narrowed) == 1:
+                    return narrowed[0].get("id"), "resolved"
+                
             return None, "ambiguous"
-
+        
         return None, "unresolved"
 
     def build_graph(self):
@@ -114,10 +160,12 @@ class DynamicGraphBuilder:
             current_depth = step['depth']
             function_name = step['function']
             scope_qualifiers = step.get('scopeQualifiers', [])
+            signature_parameters = step.get('signatureParameters', [])
+            signature_known = step.get('signatureKnown', False)
             type = step['type']
 
             # Identify Target (The function currently executing)
-            target_static_id, resolution_status = self._resolve_operation_id(function_name, scope_qualifiers)
+            target_static_id, resolution_status = self._resolve_operation_id(function_name, scope_qualifiers, signature_parameters, signature_known)
             if resolution_status in self.resolution_counts:
                 self.resolution_counts[resolution_status] += 1
 
@@ -145,6 +193,9 @@ class DynamicGraphBuilder:
                         "timestamp": step['timestamp'],
                         "type": step['type'],
                         "parameters": step['parameters'],
+                        "signatureParameters": signature_parameters,
+                        "signatureKnown": signature_known,
+                        "rawFunctionSignature": step.get('rawFunctionSignature'),
                         "simpleName": f"{step['step']}: {step['type']} {step['function']}",
                         "message": step['message'],
                         "operationResolution": resolution_status

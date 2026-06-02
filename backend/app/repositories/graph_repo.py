@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import not_, text
 from app.models.graph import Project, ProjectLog, Node, Edge
+from app.services.sabo_gen.signature_utils import extract_signature_parameters, normalized_signature_parameters, has_parameter_list
 
 class GraphRepository:
     def __init__(self, db: Session):
@@ -211,10 +212,16 @@ class GraphRepository:
                     ancestor_names.append(ancestor_name)
                     ancestor_tokens.update(_tokenize(ancestor_name))
 
+                raw_signature_parameters = extract_signature_parameters(node_id)
+                signature_known = has_parameter_list(node_id)
+
                 lookup[simple_name].append({
                     "id": node_id,
                     "ancestorNames": ancestor_names,
                     "ancestorTokens": sorted(ancestor_tokens),
+                    "signatureParameters": normalized_signature_parameters(raw_signature_parameters),
+                    "rawSignatureParameters": raw_signature_parameters,
+                    "signatureKnown": signature_known
                 })
 
         return lookup

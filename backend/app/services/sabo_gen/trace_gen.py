@@ -3,6 +3,8 @@ import sys
 import json
 from typing import List, Optional
 
+from app.services.sabo_gen.signature_utils import extract_scope_qualifiers, extract_signature_parameters, extract_simple_function_name, has_parameter_list
+
 class TraceEntry:
     def __init__(self, component: str, field2: str, process: str, timestamp: str, function_name: str, fields: str, pid: str, extra: str, direction: str, message: str, raw_line: str, line_number: int):
         self.component = component
@@ -29,23 +31,8 @@ class TraceEntry:
         return int(match.group(1)) if match else 0
     
     def get_clean_function_name(self) -> str:
-        clean_name = self.function_name
+        clean_name = extract_simple_function_name(self.function_name)
         
-        # Handle C++ function signatures - extract just the function name
-        if "::" in clean_name:
-            # Extract the actual function name from C++ signature
-            parts = clean_name.split("::")
-            if len(parts) > 1:
-                clean_name = parts[-1]  # Get the last part (actual function name)
-        
-        # Remove template parameters and function signatures
-        if "(" in clean_name:
-            clean_name = clean_name.split("(")[0]
-        
-        # Remove virtual/const keywords
-        clean_name = clean_name.replace("virtual ", "").replace("const ", "").strip()
-        
-        # Remove common prefixes to make diagrams more readable
         prefixes_to_remove = [
             f"{self.component}_",
             f"{self.component.lower()}_",
@@ -55,40 +42,22 @@ class TraceEntry:
             "impl",
             "_impl",
         ]
-        
+
         for prefix in prefixes_to_remove:
             if clean_name.startswith(prefix):
                 clean_name = clean_name[len(prefix):]
                 break
-        
-        # Remove trailing _impl suffix
+
         if clean_name.endswith("_impl"):
             clean_name = clean_name[:-5]
-        
-        # Limit function name length
+
         if len(clean_name) > 35:
             clean_name = clean_name[:32] + "..."
-                
+
         return clean_name
 
     def get_scope_qualifiers(self) -> List[str]:
-        scoped_name = self.function_name
-
-        # Strip argument list and common qualifiers while keeping namespace/class scopes.
-        if "(" in scoped_name:
-            scoped_name = scoped_name.split("(")[0]
-
-        scoped_name = scoped_name.replace("virtual ", "").replace("const ", "").strip()
-
-        if "::" not in scoped_name:
-            return []
-
-        parts = [part.strip() for part in scoped_name.split("::") if part.strip()]
-        if len(parts) <= 1:
-            return []
-
-        # Everything before the final function token is qualifier context.
-        return parts[:-1]
+        return extract_scope_qualifiers(self.function_name)
     
     def get_display_parameters(self):
         if not self.message:
@@ -152,6 +121,12 @@ class TraceEntry:
             return target_match.group(1)
             
         return None
+    
+    def get_signature_parameters(self) -> List[str]:
+        return extract_signature_parameters(self.function_name)
+    
+    def has_signature(self) -> bool:
+        return has_parameter_list(self.function_name)
     
 class TraceParser:
     def __init__(self):
@@ -221,8 +196,12 @@ class TraceParser:
             line_number=line_num
         )
 
-        # Keep scope context for ambiguity resolution before collapsing to simple function name.
+        # Keep scope and signature context for ambiguity resolution before
+        # collapsing to the simple function name used for display.
         entry.scope_qualifiers = entry.get_scope_qualifiers()
+        entry.signature_parameters = entry.get_signature_parameters()
+        entry.signature_known = entry.has_signature()
+        entry.raw_function_signature = entry.function_name
 
         entry.function_name = entry.get_clean_function_name()
 
@@ -254,6 +233,9 @@ class SequenceBuilder:
                 "type": event_type,
                 "function": func,
                 "scopeQualifiers": getattr(entry, "scope_qualifiers", []),
+                "signatureParameters": getattr(entry, "signature_parameters", []),
+                "signatureKnown": getattr(entry, "signature_known", False),
+                "rawFunctionSignature": getattr(entry, "raw_function_signature", entry.function_name),
                 "parameters": entry.get_display_parameters(),
                 "timestamp": entry.timestamp,
                 "depth": depth,
