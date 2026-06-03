@@ -112,7 +112,7 @@ Use this method to deploy SaboViz anywhere.
 
 ### 1. Download the Environment Archive
 
-Because the compiled environment is large (~ 1.2 GB), it is not stored in the Git repository.
+Because the compiled environment is large (~ 1.8 GB), it is not stored in the Git repository.
 
 #### 1. Download the `sabo-viz.tar` file from this link: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQCX3i3LRbhhR6lvgepsQjHcAYF8CWKl9wy8-7Gqq-I-C6w?e=mh4Edz
 
