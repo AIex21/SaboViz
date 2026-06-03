@@ -10,7 +10,6 @@ Welcome to the SaboViz Usage Guide. This document will walk you through the core
   - [Adding Execution Traces](#adding-execution-traces)
   - [Managing Traces (View All Traces)](#managing-traces-view-all-traces)
   - [Extracting Features (Functional Decomposition)](#extracting-features-functional-decomposition)
-  - [Trace Decomposition (Micro-Feature Segmentation)](#trace-decomposition-micro-feature-segmentation)
 - [2. The Graph Page: Architecture Visualization](#2-the-graph-page-architecture-visualization)
   - [Interacting with the Architecture](#interacting-with-the-architecture)
   - [Structural Filters (Edge Visibility)](#structural-filters-edge-visibility)
@@ -68,8 +67,7 @@ Once your static project is ready, you can manage your dynamic data and trigger 
 
 * **Add New Trace:** Upload an additional execution trace file (`.log`) for this project to merge runtime behavior with your static graph.
 * **View All Traces:** Open the full trace list to inspect, manage, or delete traces that have already been uploaded.
-* **Extract Features:** Starts the functional decomposition process. You can set custom thresholds to cluster entities based on their runtime interactions, automatically identifying high-level system features.
-* **Trace Decomposition:** Splits raw, chronological traces into distinct micro-features and coherent execution flow segments to make them readable.
+* **Extract Features:** Starts the main runtime analysis pipeline. SaboViz automatically breaks traces into readable execution segments and then groups the participating operations into high-level system features.
 * **Run Summarization:** Generates AI summaries for the entire graph (useful if you did not enable auto-summarization during project creation).
 * **Export Graph:** Downloads the current state of the graph as a file. This allows you to re-import the project later without needing to re-do the heavy processing.
 
@@ -116,36 +114,23 @@ For each trace, SaboViz provides a detailed breakdown of how successfully the dy
 ### Extracting Features (Functional Decomposition)
 To identify the high-level system features based on your uploaded execution traces, open the Project Actions modal and click **Extract Features**. 
 
-This process uses a hierarchical agglomerative clustering algorithm to group software entities that frequently interact at runtime. When you start the extraction, you will be prompted to configure the following parameters:
+Running **Extract Features** does two things at once:
 
-| Parameter | Description |
+1. It breaks each uploaded trace into readable micro-features and larger execution-flow phases.
+2. It uses those decomposed traces to recover high-level system features and infrastructure groups.
+
+As a result, the **FUNCTIONAL** tab and the **TRACE** tab on the Graph Page are both populated by this single action.
+
+When you start the extraction, the only user-facing option is:
+
+| Option | Description |
 | :--- | :--- |
-| **Distance Threshold** *(e.g., 0.4)* | Controls the granularity of the clusters. A lower value requires entities to be highly coupled to form a feature (resulting in smaller, highly specific features). A higher value allows looser coupling (resulting in larger, broader features). |
-| **Infrastructure Threshold** *(e.g., 0.3)* | Helps isolate utility or infrastructure components (e.g., generic database drivers, logging modules) that are called globally across multiple features. Properly setting this prevents generic utility classes from being improperly merged into specific business-logic features. |
-| **Use AI for Feature Naming** | When enabled, SaboViz passes the clustered entities to the integrated LLM. Instead of generic names like "Feature 1", the AI automatically generates meaningful, human-readable names and descriptions for each discovered feature. |
+| **Use AI for Feature Naming & Description** | When enabled, SaboViz passes each recovered cluster to the integrated LLM so the resulting features receive human-readable names and descriptions instead of default statistical labels. |
 
-Select your desired thresholds and click **Start Extraction** to begin the functional decomposition process.
+Once you confirm, click **Start Extraction** to begin the full pipeline.
 
 ![Extract Features Modal](assets/extract-features-modal.png)
-*(Image: The Extract Features configuration modal showing the distance threshold, infrastructure threshold, and AI naming toggle.)*
-
----
-
-### Trace Decomposition (Micro-Feature Segmentation)
-To break down long, complex execution traces into readable, logical segments (micro-features), open the Project Actions modal and click **Trace Decomposition**. 
-
-This process analyzes the sequence of dynamic events and automatically detects boundaries between different sub-phases of a trace. When you start the decomposition, you will be prompted to configure the following parameters:
-
-| Parameter | Description |
-| :--- | :--- |
-| **PELT Penalty** *(e.g., 30.0)* | Controls the sensitivity of the changepoint detection algorithm (Pruned Exact Linear Time). A higher penalty makes the algorithm stricter, resulting in fewer, larger execution segments. A lower penalty makes it more sensitive, resulting in many smaller, granular micro-features. |
-| **Hierarchical Distance Threshold** *(e.g., 0.50)* | Determines how segmented execution blocks are grouped. A lower threshold requires segments to be highly structurally similar to be clustered into the same micro-feature category. |
-| **Use AI for Micro-feature Naming** | When enabled, SaboViz passes the segmented execution blocks to the LLM to generate context-aware, human-readable phase names. When disabled, the system relies strictly on fast, rule-based labeling. |
-
-Select your desired parameters and click **Start Trace Decomposition** to process all uploaded traces for the current project.
-
-![Trace Decomposition Modal](assets/trace-decomposition-modal.png)
-*(Image: The Trace Decomposition configuration modal showing the PELT penalty, distance threshold, and AI naming toggle.)*
+*(Image: The Extract Features configuration modal showing the AI naming toggle.)*
 
 ---
 
@@ -338,7 +323,7 @@ Click and drag the panel by its header to move it around the screen. You can con
 ### Recovered Features
 On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **FUNCTIONAL** tab. This tab populates after you have executed the Functional Decomposition ("Extract Features") from the Project Actions menu.
 
-Here, you can manage and visualize the high-level system functionalities that SaboViz automatically identified from your runtime execution traces:
+Here, you can manage and visualize the high-level system functionalities that SaboViz automatically identified from the decomposed execution episodes extracted from your runtime traces:
 
 * **Toggle Feature Visibility:** Click on any feature card to highlight it. Selecting a feature will visually isolate the specific nodes and edges in the architecture graph that actively contribute to that feature during execution. An active checkmark (✓) indicates the feature is currently toggled on.
 * **Feature Categories:** SaboViz visually distinguishes the roles of your clustered entities. Standard business-logic features are represented by a puzzle piece icon (🧩), while global infrastructure or utility modules are represented by a gear icon (⚙️).
@@ -351,19 +336,19 @@ Here, you can manage and visualize the high-level system functionalities that Sa
 ---
 
 ### Trace Decomposition
-On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **TRACE** tab. This tab populates after you run **Trace Decomposition** from the Project Actions menu.
+On the left side of the Graph Page, within the **Sidebar Panel**, you can switch to the **TRACE** tab. This tab populates after you run **Extract Features** from the Project Actions menu.
 
-The Trace tab helps you understand the chronological flow of a specific execution trace by breaking down thousands of raw operations into a readable hierarchy of logical phases.
+The Trace tab helps you understand the chronological flow of a specific execution trace by showing the automatically detected micro-features and the larger logical phases recovered during feature extraction.
 
 #### Trace Flow (Macro and Micro-Features)
 The top section of the Trace tab displays the **Trace Flow** timeline, which organizes the execution sequence into two levels of abstraction:
 
-* **The Hierarchical Flow:** These top-level segments represent large, coherent chapters of execution (e.g., a complete "User Authentication" phase). They are created by grouping structurally similar micro-features together. **Double-clicking** a segment in the hierarchical flow expands it to reveal its underlying children (the micro-features).
+* **The Hierarchical Flow:** These top-level segments represent large, coherent chapters of execution (e.g., a complete "User Authentication" phase). They are created by hierarchically merging adjacent micro-features into larger execution episodes. **Double-clicking** a segment in the hierarchical flow expands it to reveal its underlying children.
 * **The Micro-Feature Flow:** These are the granular, sequential building blocks that make up a hierarchical phase. They represent distinct, short-lived tasks within the trace (e.g., "Validating Password Hash"). 
 
 **Clicking** on any segment in the flow (either a hierarchical macro-phase or a micro-feature) will instantly isolate it and reveal additional contextual information:
 
-* **AI Naming & Summary (✨):** If enabled during the trace decomposition, clicking a segment displays its AI-generated human-readable name and a descriptive summary explaining the specific goal of that system phase.
+* **AI Naming & Summary (✨):** If enabled during feature extraction, clicking a segment displays its AI-generated human-readable name and a descriptive summary explaining the specific goal of that system phase.
 * **Highlighting Steps:** Selecting a segment will automatically scroll and highlight the associated raw operations in the **Steps List** below.
 * **Highlight Cluster Component Button:** When a segment is selected, you can click the "Highlight Cluster Components" button. This action visually isolates the specific static architectural components (nodes and edges) on the main graph canvas that are involved in this exact execution segment, dimming the rest of the architecture.
 
