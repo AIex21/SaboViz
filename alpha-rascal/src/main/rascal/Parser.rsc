@@ -35,6 +35,10 @@ private str localDrive = "C:";
 list[loc] includeFiles;
 list[loc] stdLibFiles;
 
+private set[loc] allProjectHeaders = {};
+private map[str, set[loc]] includeRootIndex = ();
+private set[loc] inferredProjectIncludeDirs = {};
+
 
 /**
  * Entry point of the module. Loads the configuration, sets up processing flags, 
@@ -64,10 +68,14 @@ void main(str moduleName = "") {
     println("[CONFIG_VALUE] saveUnresolvedIncludes: <saveUnresolvedIncludes>");
 
     println("Scanning project headers in <inputFolderAbsolutePath>...");
-    includeFiles = findAllIncludeDirs(inputFolderAbsolutePath);
+    allProjectHeaders = findAllHeaderFiles(inputFolderAbsolutePath);
+    includeFiles = findAllIncludeDirs(allProjectHeaders);
+    includeRootIndex = buildIncludeRootIndex(inputFolderAbsolutePath, allProjectHeaders);
 
     println("Scanning external libraries in <externalLibRoot>...");
-    stdLibFiles = findAllIncludeDirs(externalLibRoot);
+    set[loc] allExternalHeaders = findAllHeaderFiles(externalLibRoot);
+    stdLibFiles = findAllIncludeDirs(allExternalHeaders);
+
 
     if(verbose) {
         println("Using Include Dirs: <includeFiles>");
@@ -99,9 +107,7 @@ public void parseCppListToM3(str m3FileName) {
  * Parses a predefined list of modules, extracting and optionally composing M3 models for each module.
  */
 public void parseModuleListToComposedM3() {
-    list[loc] listsOfInputFilesForModules = [];
-
-    cppFiles = findAllCppFiles(inputFolderAbsolutePath);
+    list[loc] cppFiles = findAllCppFiles(inputFolderAbsolutePath);
     processCppFiles(cppFiles, "FullProject");
 }
 
@@ -191,11 +197,54 @@ private void outputUnresolvedIncludes(str fileName, rel[loc directive, loc resol
  * @param stdLibFiles list of folders containing the standard libraries used in the analysed system.
  * @return ModelContainer holding the extracted M3 and AST models for the given C++ file.
  */
-private ModelContainer extractModelsFromCppFile(loc filePath, list[loc] includeFiles, list[loc] stdLibFiles){
-    ModelContainer extractedModels = createM3AndAstFromCppFile(filePath, stdLib = stdLibFiles, includeDirs = includeFiles);
-    // extractedModels[0] = inflateM3(extractedModels[0]);
+private ModelContainer extractModelsFromCppFile(loc filePath, list[loc] baseIncludeFiles, list[loc] stdLibFiles){
+    list[loc] effectiveIncludeFiles = baseIncludeFiles + toList(inferredProjectIncludeDirs);
 
-    return extractedModels;
+    ModelContainer extractedModels = createM3AndAstFromCppFile(filePath, stdLib = stdLibFiles, includeDirs = effectiveIncludeFiles);
+
+    rel[loc directive, loc resolved] unresolvedIncludes = rangeR(extractedModels[0].includeResolution, {|unresolved:///|});
+
+    if (size(unresolvedIncludes) == 0) {
+        return extractedModels;
+    }
+
+    set[loc] inferredIncludeDirs = inferIncludeDirsFromUnresolvedIncludes(unresolvedIncludes, includeRootIndex);
+
+    inferredIncludeDirs = inferredIncludeDirs - toSet(effectiveIncludeFiles);
+
+    if (size(inferredIncludeDirs) == 0) {
+        return extractedModels;
+    }
+
+    inferredProjectIncludeDirs += inferredIncludeDirs;
+
+    println("[INFO] Retrying <filePath> with inferred include dirs: <inferredIncludeDirs>");
+
+    list[loc] retryIncludeFiles = effectiveIncludeFiles + toList(inferredIncludeDirs);
+
+    ModelContainer retryExtractedModels = createM3AndAstFromCppFile(filePath, stdLib = stdLibFiles, includeDirs = retryIncludeFiles);
+
+    return retryExtractedModels;
+}
+
+public set[loc] inferIncludeDirsFromUnresolvedIncludes(rel[loc directive, loc resolved] unresolvedIncludes, map[str, set[loc]] includeRootIndex) {
+    set[loc] inferredIncludeDirs = {};
+
+    for (tuple[loc directive, loc resolved] unresolved <- unresolvedIncludes) {
+        str includePath = unresolved.directive.path;
+
+        if (startsWith(includePath, "/")) {
+            includePath = substring(includePath, 1);
+        }
+
+        includePath = replaceAll(includePath, "\\\\", "/");
+
+        if (includePath in includeRootIndex) {
+            inferredIncludeDirs += includeRootIndex[includePath];
+        }
+    }
+
+    return inferredIncludeDirs;
 }
 
 /**
@@ -210,19 +259,72 @@ public list[loc] findAllCppFiles(loc rootDirectory) {
     return toList(cppFiles + cFiles);
 }
 
+public set[loc] findAllHeaderFiles(loc rootDirectory) {
+    set[loc] hFiles = find(rootDirectory, "h");
+    set[loc] hppFiles = find(rootDirectory, "hpp");
+    set[loc] hhFiles = find(rootDirectory, "hh");
+    set[loc] hxxFiles = find(rootDirectory, "hxx");
+
+    return hFiles + hppFiles + hhFiles + hxxFiles;
+}
+
 /**
  * Recursively finds all folders that contain header files.
  */
-public list[loc] findAllIncludeDirs(loc rootDirectory) {
-    set[loc] hFiles = find(rootDirectory, "h");
-    set[loc] hppFiles = find(rootDirectory, "hpp");
-
-    set[loc] allIncludeFiles = hFiles + hppFiles;
-    
-    // We only want the folder containing the file, not the file itself
-    set[loc] includeDirs = { file.parent | loc file <- allIncludeFiles };
-    
+public list[loc] findAllIncludeDirs(set[loc] headerFiles) {
+    set[loc] includeDirs = { file.parent | loc file <- headerFiles };
     return toList(includeDirs);
+}
+
+public map[str, set[loc]] buildIncludeRootIndex(loc rootDirectory, set[loc] headerFiles) {
+    map[str, set[loc]] index = ();
+
+    for (loc header <- headerFiles) {
+        str relativePath = makeRelativePath(header.path, rootDirectory.path);
+
+        list[str] parts = split("/", relativePath);
+
+        for (int i <- [0 .. size(parts)]) {
+            str suffix = intercalate("/", parts[i .. size(parts)]);
+
+            if (suffix == "") {
+                continue;
+            }
+
+            str rootSuffix = intercalate("/", parts[0 .. i]);
+
+            loc includeRoot;
+
+            if (rootSuffix == "") {
+                includeRoot = rootDirectory;
+            } else {
+                includeRoot = |file://<rootDirectory.path>/<rootSuffix>|;
+            }
+
+            if (suffix in index) {
+                index[suffix] += { includeRoot };
+            } else {
+                index[suffix] = { includeRoot };
+            }
+        }
+    }
+
+    return index;
+}
+
+public str makeRelativePath(str fullPath, str rootPath) {
+    str normalizedFullPath = replaceAll(fullPath, "\\\\", "/");
+    str normalizedRootPath = replaceAll(rootPath, "\\\\", "/");
+
+    if (endsWith(normalizedRootPath, "/")) {
+        normalizedRootPath = substring(normalizedRootPath, 0, size(normalizedRootPath) - 1);
+    }
+
+    if (startsWith(normalizedFullPath, normalizedRootPath + "/")) {
+        return substring(normalizedFullPath, size(normalizedRootPath) + 1);
+    }
+
+    return normalizedFullPath;
 }
 
 /**
