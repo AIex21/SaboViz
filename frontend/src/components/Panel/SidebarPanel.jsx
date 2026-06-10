@@ -39,6 +39,7 @@ const SidebarPanel = ({
     onToggleTraceFlowHighlight,
     currentStep = 0,
     onStepChange,
+    onSelectTraceStep,
     failureIndices = [],
     isMicroFeatureFlowLoading = false,
     isDecomposing = false,
@@ -1003,7 +1004,14 @@ const SidebarPanel = ({
                                                     <button
                                                         key={step?.data?.id || `trace_step_${index}`}
                                                         type="button"
-                                                        onClick={() => onStepChange && onStepChange(index)}
+                                                        onClick={() => {
+                                                            if (onSelectTraceStep) {
+                                                                onSelectTraceStep(index);
+                                                                return;
+                                                            }
+
+                                                            if (onStepChange) onStepChange(index);
+                                                        }}
                                                         style={traceRowStyle(isCurrent, isFailure, isFlowHighlighted)}
                                                         title={`${getStepLabel(step, index)} | ${actionKind || 'action'} | ${resolution.label}`}
                                                     >

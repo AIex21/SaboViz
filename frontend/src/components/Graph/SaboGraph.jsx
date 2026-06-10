@@ -12,6 +12,25 @@ const GHOST_EDGE_ID = 'trace-ghost-edge';
 const PANEL_BASE_INSET = 20;
 const PANEL_DOCK_GAP = 12;
 
+const createTraceSelection = (step) => {
+    const properties = step?.data?.properties || {};
+    if (Object.keys(properties).length === 0) return null;
+
+    const traceStepNumber = Number(properties.step);
+    const traceStepId = step?.data?.id ?? (Number.isFinite(traceStepNumber) ? `trace-step-${traceStepNumber}` : null);
+
+    return {
+        id: GHOST_EDGE_ID,
+        label: 'executes',
+        simpleName: properties.simpleName || properties.message || 'Trace Step',
+        source: properties.sourceId || null,
+        target: properties.targetId || null,
+        properties,
+        traceStepId: traceStepId != null ? String(traceStepId) : null,
+        traceStepNumber: Number.isFinite(traceStepNumber) ? traceStepNumber : null,
+    };
+};
+
 const SaboGraph = ({ 
     data, 
     activeNodeId, 
@@ -226,6 +245,19 @@ const SaboGraph = ({
 
         return mapping;
     }, [elements]);
+
+    const handleTraceStepSelect = (stepIndex) => {
+        const nextStep = traceSteps?.[stepIndex];
+        const nextSelection = createTraceSelection(nextStep);
+
+        if (nextSelection) {
+            setSelectedElement(nextSelection);
+        }
+
+        if (onStepChange) {
+            onStepChange(stepIndex);
+        }
+    };
 
     // --- HELPER: Find the Visible Ancestor ---
     const getVisibleNodeId = (targetId) => {
@@ -640,6 +672,10 @@ const SaboGraph = ({
     useEffect(() => {
         if (!cyInstance || !selectedElement?.id) return;
 
+        if (selectedElement.id === GHOST_EDGE_ID) {
+            return;
+        }
+
         const selectedId = String(selectedElement.id);
         const currentElement = cyInstance.getElementById(selectedId);
 
@@ -651,6 +687,26 @@ const SaboGraph = ({
         // If the selected item disappeared after a graph update, close the panel.
         setSelectedElement(null);
     }, [cyInstance, elements, selectedElement?.id]);
+
+    useEffect(() => {
+        if (selectedElement?.id !== GHOST_EDGE_ID) return;
+
+        const nextSelection = createTraceSelection(traceSteps?.[currentStep]);
+        if (!nextSelection) {
+            setSelectedElement(null);
+            return;
+        }
+
+        const hasChanged = (
+            selectedElement.traceStepId !== nextSelection.traceStepId ||
+            String(selectedElement.source || '') !== String(nextSelection.source || '') ||
+            String(selectedElement.target || '') !== String(nextSelection.target || '')
+        );
+
+        if (hasChanged) {
+            setSelectedElement(nextSelection);
+        }
+    }, [selectedElement, traceSteps, currentStep]);
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative', background: THEME.bg }}>
@@ -674,6 +730,7 @@ const SaboGraph = ({
                 isMicroFeatureFlowLoading={isMicroFeatureFlowLoading}
                 currentStep={currentStep}
                 onStepChange={onStepChange}
+                onSelectTraceStep={handleTraceStepSelect}
                 failureIndices={failureIndices}
                 isDecomposing={isDecomposing}
             />

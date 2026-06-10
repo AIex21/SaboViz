@@ -36,7 +36,12 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
 
     // --- CONTEXT ---
     const isTraceEdge = id === 'trace-ghost-edge';
-    const isEdge = source && target;
+    const traceAction = isTraceEdge
+        ? { ...(activeTraceAction || {}), ...(selectedElement.properties || {}) }
+        : null;
+    const connectionSource = isTraceEdge ? (traceAction?.sourceId ?? source) : source;
+    const connectionTarget = isTraceEdge ? (traceAction?.targetId ?? target) : target;
+    const isEdge = connectionSource && connectionTarget;
     const isAggregateNode = !isEdge && Boolean(selectedElement.isAggregateNode);
     const isAggregatedEdge = isEdge && Boolean(isAggregated);
     const isNode = !isEdge && !isAggregated;
@@ -46,14 +51,14 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
     // --- PREPARE PROPERTIES ---
     let displayProperties = selectedElement.properties || {};
 
-    if (isTraceEdge && activeTraceAction) {
+    if (isTraceEdge && traceAction) {
         displayProperties = {
-            "Trace Step": activeTraceAction.step,
-            "Action Type": activeTraceAction.type,
-            "Parameters": activeTraceAction.parameters,
-            "Message": activeTraceAction.message,
-            "Operation": activeTraceAction.simpleName,
-            "Timestamp": activeTraceAction.timestamp
+            "Trace Step": traceAction.step,
+            "Action Type": traceAction.type,
+            "Parameters": traceAction.parameters,
+            "Message": traceAction.message,
+            "Operation": traceAction.simpleName,
+            "Timestamp": traceAction.timestamp
         };
     }
 
@@ -65,7 +70,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
     if (isTraceEdge) {
         headerColor = 'rgba(214, 51, 132, 0.2)'; 
         badgeText = "TRACE EXECUTION";
-        title = activeTraceAction ? activeTraceAction.simpleName : "Trace Step";
+        title = traceAction?.simpleName || simpleName || "Trace Step";
     } else if (isAggregateNode) {
         headerColor = 'rgba(56, 189, 248, 0.16)';
         badgeText = "AGGREGATED NODE";
@@ -103,7 +108,7 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
             if (val.includes('OK') || val.includes('SUCCESS')) return <span style={{color: THEME.success, fontWeight: '700'}}>{val}</span>;
         }
 
-        if (CODE_KEYS.has(key) || key === 'id') {
+        if ((CODE_KEYS.has(key) || key === 'id') && typeof val !== 'object') {
             return <code style={styles.codeBlock}>{val}</code>;
         }
 
@@ -111,7 +116,11 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
             if (val.length === 0) return <span style={{fontStyle: 'italic', color: '#667'}}>empty</span>;
             return (
                 <ul style={{margin: '4px 0 0 0', paddingLeft: '16px', color: '#e0e0e0', fontSize: '12px', textAlign: 'left', width: '100%' }}>
-                    {val.map((item, i) => <li key={i} style={{marginBottom: '4px'}}>{item}</li>)}
+                    {val.map((item, i) => (
+                        <li key={i} style={{marginBottom: '4px'}}>
+                            {renderValue(key, item, true)}
+                        </li>
+                    ))}
                 </ul>
             )
         }
@@ -204,10 +213,10 @@ const DetailsPanel = ({ selectedElement, onClose, onToggleLock, lockedNodeIds, o
                     <div style={styles.section}>
                         <h4 style={styles.sectionTitle}>Connections</h4>
                         <div style={styles.row}>
-                            <strong style={styles.keyLabel}>Source:</strong> {renderValue('source', source)}
+                            <strong style={styles.keyLabel}>Source:</strong> {renderValue('source', connectionSource)}
                         </div>
                         <div style={styles.row}>
-                            <strong style={styles.keyLabel}>Target:</strong> {renderValue('target', target)}
+                            <strong style={styles.keyLabel}>Target:</strong> {renderValue('target', connectionTarget)}
                         </div>
                     </div>
                 )}
