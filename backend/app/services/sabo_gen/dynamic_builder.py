@@ -133,6 +133,15 @@ class DynamicGraphBuilder:
                 if len(narrowed) == 1:
                     return narrowed[0].get("id"), "resolved"
                 
+                # If exact type matching failed, compare only parameter count
+                arity_matches = [
+                    candidate for candidate in narrowed
+                    if candidate.get("signatureKnown", False) and len(candidate.get("signatureParameters") or []) == len(signature_parameters)
+                ]
+
+                if len(arity_matches) == 1:
+                    return arity_matches[0].get("id"), "resolved"
+                
             return None, "ambiguous"
         
         return None, "unresolved"

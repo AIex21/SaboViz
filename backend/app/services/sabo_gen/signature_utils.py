@@ -128,6 +128,13 @@ def extract_signature_parameters(signature: str) -> List[str]:
 def normalize_parameter_type(parameter: str) -> str:
     text = _unwrap_location(parameter)
 
+    text = text.replace(";", ",")
+
+    text = re.sub(r"\b(const|volatile)\s*\.", r"\1 ", text)
+    text = text.replace(".&&", "&&")
+    text = text.replace(".&", "&")
+    text = text.replace(".*", "*")
+
     # Remove default values.
     if "=" in text:
         text = text.split("=", 1)[0].strip()
