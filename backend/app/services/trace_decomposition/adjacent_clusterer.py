@@ -33,7 +33,7 @@ class AdjacentClusterer:
             merge_distances = merge_distances,
         )
 
-        selected_partions = self._merge_weak_top_level_clusters(selected_partition)
+        selected_partition = self._merge_weak_top_level_clusters(selected_partition)
 
         if allow_ai and summarizer is not None:
             selected_partition = [
