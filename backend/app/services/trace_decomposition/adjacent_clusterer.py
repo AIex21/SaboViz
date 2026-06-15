@@ -33,6 +33,8 @@ class AdjacentClusterer:
             merge_distances = merge_distances,
         )
 
+        selected_partions = self._merge_weak_top_level_clusters(selected_partition)
+
         if allow_ai and summarizer is not None:
             selected_partition = [
                 self._summarize_cluster_tree(cluster, summarizer)
@@ -110,6 +112,7 @@ class AdjacentClusterer:
 
             partition_dispersion = self._partition_internal_dispersion(partition)
             separation = self._partition_boundary_separation(partition)
+            functional_separation = self._partition_functional_separation(partition)
             merge_jump = self._merge_jump_score(
                 partition_index = partition_index,
                 merge_distances = merge_distances,
@@ -122,11 +125,15 @@ class AdjacentClusterer:
                 initial_cluster_count = initial_cluster_count,
             )
 
+            weak_execution_unit_penalty = self._weak_execution_unit_penalty(partition)
+
             score = (
-                0.40 * dispersion_gain
-                + 0.35 * separation
-                + 0.25 * merge_jump
-                - 0.45 * complexity_penalty
+                0.25 * dispersion_gain
+                + 0.20 * separation
+                + 0.20 * functional_separation
+                + 0.15 * merge_jump
+                - 0.20 * complexity_penalty
+                - 0.50 * weak_execution_unit_penalty
             )
 
             if cluster_count == 1:
@@ -240,6 +247,69 @@ class AdjacentClusterer:
             + 0.25 * context_distance
         )
     
+    def _partition_functional_separation(self, partition):
+        if len(partition) <= 1:
+            return 0.0
+
+        distances = []
+
+        for index in range(len(partition) - 1):
+            left_cluster = partition[index]
+            right_cluster = partition[index + 1]
+
+            left_components = set(left_cluster.get("components", []) or [])
+            right_components = set(right_cluster.get("components", []) or [])
+
+            similarity = self._jaccard_similarity(left_components, right_components)
+            distance = 1.0 - similarity
+
+            left_strength = self._execution_unit_strength(left_cluster)
+            right_strength = self._execution_unit_strength(right_cluster)
+
+            evidence_strength = min(left_strength, right_strength)
+
+            distances.append(distance * evidence_strength)
+
+        if not distances:
+            return 0.0
+
+        return float(sum(distances) / len(distances))
+    def _weak_execution_unit_penalty(self, partition):
+        if len(partition) <= 1:
+            return 0.0
+        
+        penalties = []
+
+        for cluster in partition:
+            strength = self._execution_unit_strength(cluster)
+            weakness = 1.0 - strength
+            penalties.append(weakness)
+
+        if not penalties:
+            return 0.0
+
+        mean_penalty = sum(penalties) / float(len(penalties))
+        max_penalty = max(penalties)
+
+        return 0.50 * mean_penalty + 0.50 * max_penalty
+
+    def _execution_unit_strength(self, cluster):
+        segments = cluster.get("segments", []) or []
+
+        segment_count = len(segments)
+
+        step_count = 0
+        for segment in segments:
+            step_count += len(segment.get("steps", []) or [])
+
+        component_count = len(cluster.get("components", []) or [])
+
+        segment_strength = min(1.0, segment_count / 2.0)
+        step_strength = min(1.0, step_count / 20.0)
+        component_strength = min(1.0, component_count / 3.0)
+
+        return max(segment_strength, 0.60 * step_strength + 0.40 * component_strength)
+    
     def _partition_internal_dispersion(self, partition):
         if not partition:
             return 0.0
@@ -335,6 +405,88 @@ class AdjacentClusterer:
             return 0.0
         
         return (cluster_count - 1) / float(initial_cluster_count)
+    
+    def _merge_weak_top_level_clusters(self, partition, min_strength = 0.75):
+        clusters = list(partition or [])
+
+        if len(clusters) <= 1:
+            return clusters
+        
+        while len(clusters) > 1:
+            weakest_index = -1
+            weakest_strength = float("inf")
+
+            for index, cluster in enumerate(clusters):
+                strength = self._execution_unit_strength(cluster)
+
+                if strength < weakest_strength:
+                    weakest_strength = strength
+                    weakest_index = index
+
+            if weakest_index < 0:
+                break
+
+            if weakest_strength >= min_strength:
+                break
+
+            neighbor_index = self._best_neighbor_for_weak_cluster(clusters, weakest_index)
+
+            if neighbor_index < 0:
+                break
+
+            left_index = min(weakest_index, neighbor_index)
+            right_index = max(weakest_index, neighbor_index)
+
+            merge_distance = self._mixed_cluster_distance(
+                clusters[left_index],
+                clusters[right_index],
+            )
+
+            merged_cluster = self._merge_clusters(
+                clusters[left_index],
+                clusters[right_index],
+                merge_distance = merge_distance,
+            )
+
+            clusters = (
+                clusters[:left_index]
+                + [merged_cluster]
+                + clusters[right_index + 1 :]
+            )
+
+        return clusters
+    
+    def _best_neighbor_for_weak_cluster(self, clusters, weak_index):
+        if not clusters:
+            return -1
+
+        if len(clusters) <= 1:
+            return -1
+
+        if weak_index <= 0:
+            return 1
+
+        if weak_index >= len(clusters) - 1:
+            return len(clusters) - 2
+
+        left_cluster = clusters[weak_index - 1]
+        weak_cluster = clusters[weak_index]
+        right_cluster = clusters[weak_index + 1]
+
+        left_distance = self._mixed_cluster_distance(
+            left_cluster,
+            weak_cluster,
+        )
+
+        right_distance = self._mixed_cluster_distance(
+            weak_cluster,
+            right_cluster,
+        )
+
+        if left_distance <= right_distance:
+            return weak_index - 1
+
+        return weak_index + 1
     
     def _cluster_segment_vectors(self, cluster):
         vectors = []
@@ -462,12 +614,12 @@ class AdjacentClusterer:
         set_b = set(set_b or [])
 
         if not set_a and not set_b:
-            return 0.0
+            return 1.0
 
         union = set_a | set_b
 
         if not union:
-            return 0.0
+            return 1.0
 
         return len(set_a & set_b) / float(len(union))
 
