@@ -2,16 +2,19 @@ import re
 
 from collections import Counter
 
+from app.services.sabo_gen.config import NODE_OPERATION
 from app.services.trace_decomposition.utils import TraceDecompositionUtils
-
+from app.services.trace_decomposition.repeated_block_detector import RepeatedBlockDetector
 
 class SegmentEnricher:
     def __init__(self, graph_service):
         self.graph_service = graph_service
         self.utils = TraceDecompositionUtils()
+        self.repeated_block_detector = RepeatedBlockDetector(self.utils)
 
     def enrich(self, pelt_segments, summarizer, allow_ai, node_lookup, collect_nodes_with_ancestors, progress_step=None):
         enriched_segments = []
+        previous_micro_feature = None
 
         for index, segment_steps in enumerate(pelt_segments, start=1):
             components = self._collect_segment_components(segment_steps)
@@ -23,11 +26,16 @@ class SegmentEnricher:
             segment_description = fallback_description
 
             if allow_ai and summarizer is not None and components:
-                linked_nodes = collect_nodes_with_ancestors(components, node_lookup)
+                operation_nodes = self._collect_operation_nodes(components, node_lookup)
 
-                if linked_nodes:
-                    internal_edges = self.graph_service.get_edges_between_nodes(components)
-                    ai_result = summarizer.prompt_micro_feature(linked_nodes, internal_edges)
+                if operation_nodes:
+                    compressed_flow = self.repeated_block_detector.compress(segment_steps)
+
+                    ai_result = summarizer.prompt_micro_feature(
+                        operation_nodes = operation_nodes,
+                        compressed_flow = compressed_flow,
+                        previous_micro_feature = previous_micro_feature,
+                        )
 
                     ai_name = (ai_result or {}).get("feature_name")
                     ai_description = (ai_result or {}).get("description")
@@ -36,6 +44,11 @@ class SegmentEnricher:
                         segment_name = ai_name
                     if ai_description:
                         segment_description = ai_description
+
+            current_micro_feature = {
+                "name": segment_name,
+                "description": segment_description,
+            }
 
             enriched_segments.append(
                 {
@@ -46,6 +59,8 @@ class SegmentEnricher:
                     "steps": segment_steps,
                 }
             )
+
+            previous_micro_feature = current_micro_feature
 
             if progress_step is not None:
                 progress_step(segment_name)
@@ -128,3 +143,19 @@ class SegmentEnricher:
             return f"Includes operations around {preview}."
 
         return "No summary could be generated for this segment."
+    
+    def _collect_operation_nodes(self, components, node_lookup):
+        operation_nodes = []
+
+        for node_id in components:
+            node = node_lookup.get(node_id)
+            if not node:
+                continue
+
+            labels = set(node.labels or [])
+            if NODE_OPERATION not in labels:
+                continue
+
+            operation_nodes.append(node)
+
+        return operation_nodes

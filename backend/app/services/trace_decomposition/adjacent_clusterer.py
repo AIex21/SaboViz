@@ -208,8 +208,8 @@ class AdjacentClusterer:
         }
 
         if len(summarized_children) == 2:
-            left_description = summarized_children[0].get("description", "")
-            right_description = summarized_children[1].get("description", "")
+            left_description = summarized_children[0]
+            right_description = summarized_children[1]
 
             ai_result = summarizer.prompt_hierarchical_feature(left_description, right_description)
 

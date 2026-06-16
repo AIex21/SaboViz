@@ -52,3 +52,4 @@ class TraceDecompositionUtils:
                     step_numbers.append(int(stripped))
 
         return step_numbers
+        

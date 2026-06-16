@@ -346,121 +346,278 @@ class SummarizationService:
 
         return self.llm.generate_json(prompt, analyze_project_tool)
     
-    def prompt_feature(self, nodes: list[Node], edges: list[Edge], is_infrastructure=False) -> dict:
+    def prompt_feature(self, operation_nodes: list[Node], is_infrastructure: bool = False) -> dict:
+        feature_kind = "Infrastructure Feature" if is_infrastructure else "Business/User-Facing Feature"
+
         prompt_lines = [
-            "Analyze the following cluster of tightly coupled software operations that make up a distinct software feature.",
+            f"Analyze the following cluster of software functions/operations as one {feature_kind}.",
             "",
-            "### Operations in this Cluster:"
+            "This cluster was produced from dynamic execution traces.",
+            "The listed functions are the evidence for the feature.",
+            "Do not infer broader system context from files, classes, namespaces, or project names.",
+            "",
+            "### Functions/Operations in This Feature Cluster",
         ]
 
-        node_lookup = {}
-        for node in nodes:
+        for node in operation_nodes:
             name = node.properties.get("simpleName", node.id)
-            node_lookup[node.id] = name
-            summary = node.ai_summary.get("description", "") if node.ai_summary else "No summary available."
+
+            summary = "No summary available."
+            if node.ai_summary and isinstance(node.ai_summary, dict):
+                summary = node.ai_summary.get("description") or summary
+
             prompt_lines.append(f"- {name}: {summary}")
-
-        if edges:
-            prompt_lines.append("")
-            prompt_lines.append("### Execution Flow:")
-            for edge in edges:
-                source_name = node_lookup.get(edge.source_id)
-                target_name = node_lookup.get(edge.target_id)
-
-                if source_name and target_name:
-                    prompt_lines.append(f"- {source_name} --[{edge.label}]--> {target_name}")
 
         prompt_lines.append("")
         prompt_lines.append("FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):")
-        prompt_lines.append("- Name the feature strictly from the exact operations present; do not imply a broader system.")
-        prompt_lines.append("- If the cluster mainly lists or reads data, prefer specific names like 'Listing' or 'Retrieval' over broad labels.")
-        prompt_lines.append("- Use specific, operation-grounded actions. Natural action phrases are allowed when concrete (e.g., 'Setting Up', 'Initializing', 'Resetting').")
-        prompt_lines.append("- Do NOT include project/system labels in feature_name or description (e.g., avoid 'in Security System', 'for Semiconductor Platform').")
-        prompt_lines.append("- feature_context should be empty unless needed for disambiguation.")
-        prompt_lines.append("- The description MUST explicitly state what this cluster includes (key operation groups or responsibilities), not only what it does.")
-        prompt_lines.append("- Keep the same terminology used in the provided operation names/summaries whenever possible.")
-        prompt_lines.append("- Do not invent new entities, workflows, or scope not present in the cluster context.")
+        prompt_lines.append("- Name the feature strictly from the functions/operations listed above.")
+        prompt_lines.append("- Use the function descriptions only as supporting semantic context.")
+        prompt_lines.append("- Do not introduce entities, workflows, files, classes, modules, or system context not present in the listed functions.")
+        prompt_lines.append("- Do NOT include project/system labels in feature_name or description.")
+        prompt_lines.append("- Keep the same terminology used in the provided function names/summaries whenever possible.")
         prompt_lines.append("- If uncertain, reuse exact operation wording instead of abstracting.")
+        prompt_lines.append("- The description MUST explicitly state what this function cluster includes, using concrete operation groups or responsibilities.")
+        prompt_lines.append("- feature_context should be empty unless needed for disambiguation.")
 
         if is_infrastructure:
-            prompt_lines.append("- This is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple parts of the codebase.")
+            prompt_lines.append("- This is a cross-cutting Infrastructure Feature made of shared technical utilities used across multiple traces/features.")
+            prompt_lines.append("- Do not try to force a user-facing/business workflow name.")
             prompt_lines.append("- Name format for infrastructure: [Scope/Qualifier] + [Shared Capability].")
-            prompt_lines.append("- Examples: 'Common Utilities', 'Shared Infrastructure Utilities', 'Cross-Cutting Runtime Utilities', 'Core Validation Utilities'.")
-            prompt_lines.append("- The description should start with 'Includes:' and then list concrete utilities/capabilities represented by the operations, without system-level context.")
+            prompt_lines.append("- Examples: 'Common Validation Utilities', 'Shared Runtime Utilities', 'Core Parsing Utilities'.")
+            prompt_lines.append("- The description should start with 'Includes:' and list concrete utilities/capabilities represented by the operations.")
+            prompt_lines.append("- Avoid broad names like 'Common Utilities' if the listed functions reveal a more specific utility capability.")
         else:
-            prompt_lines.append("- This is a domain-specific Business Feature.")
-            prompt_lines.append("- Determine its exact business capability or user-facing workflow.")
-            prompt_lines.append("- Name format for business features: [Specific Action/Verb] + [Entity] + [Context].")
-            prompt_lines.append("- Examples: 'Encrypted Password Retrieval', 'Database Item Listing', 'Invoice PDF Generation'.")
-            prompt_lines.append("- Avoid generic infrastructure-style names like 'Common Utilities' for business clusters.")
-            prompt_lines.append("- Avoid broad names like 'Password Management'; prefer specific names like 'Setting Up Master Password', 'Adding Password', or 'Password Retrieval'.")
+            prompt_lines.append("- This is a domain-specific business or user-facing feature.")
+            prompt_lines.append("- Determine the exact capability represented by the listed functions.")
+            prompt_lines.append("- Name format for business features: [Specific Action/Verb] + [Entity] + optional [Context].")
+            prompt_lines.append("- Examples: 'Adding Product Records', 'Listing Inventory Items', 'Generating Invoice PDFs'.")
+            prompt_lines.append("- Avoid generic infrastructure-style names like 'Common Utilities'.")
+            prompt_lines.append("- Avoid broad names like 'Management', 'Processing', or 'Handling' when a more specific action is visible.")
 
         prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_feature_tool)
 
-    def prompt_micro_feature(self, nodes: list[Node], edges: list[Edge]) -> dict:
+    def prompt_micro_feature(self, operation_nodes: List[Node], compressed_flow: Optional[List[Dict[str, Any]]] = None, previous_micro_feature: Optional[Dict[str, Any]] = None) -> dict:
         prompt_lines = [
             "Analyze the following trace segment as a MICRO-FEATURE.",
-            "Focus on the operation flow and describe what concretely happens across this short execution slice.",
+            "A micro-feature is a small local execution slice inside one larger user-facing feature.",
+            "Focus on what concretely happens in this segment, not on the whole system.",
             "",
-            "### Operations in this Trace Segment:"
         ]
 
+        if previous_micro_feature:
+            previous_name = str(previous_micro_feature.get("name") or "").strip()
+            previous_description = str(previous_micro_feature.get("description") or "").strip()
+
+            if previous_name or previous_description:
+                prompt_lines.append("### Previous Micro-Feature Context")
+                if previous_name:
+                    prompt_lines.append(f"- Name: {previous_name}")
+                if previous_description:
+                    prompt_lines.append(f"- Description: {previous_description}")
+                prompt_lines.append("")
+                prompt_lines.append(
+                    "Use the previous micro-feature only as local transition context. "
+                    "Do not merge the current segment with it, and do not copy its name unless the current segment genuinely continues the same concrete action."
+                )
+                prompt_lines.append("")
+
+        prompt_lines.append("### Functions/Operations in This Micro-Feature")
+
         node_lookup = {}
-        for node in nodes:
+
+        for node in operation_nodes:
             name = node.properties.get("simpleName", node.id)
-            node_lookup[node.id] = name
-            summary = node.ai_summary.get("description", "") if node.ai_summary else "No summary available."
+            node_lookup[str(node.id)] = name
+
+            summary = "No summary available."
+            if node.ai_summary and isinstance(node.ai_summary, dict):
+                summary = node.ai_summary.get("description") or summary
+
             prompt_lines.append(f"- {name}: {summary}")
 
-        if edges:
+        if compressed_flow:
             prompt_lines.append("")
-            prompt_lines.append("### Observed Operation Flow:")
-            for edge in edges:
-                source_name = node_lookup.get(edge.source_id)
-                target_name = node_lookup.get(edge.target_id)
+            prompt_lines.append("### Compressed Observed Runtime Flow")
+            prompt_lines.append(
+                "The following flow is ordered by runtime execution. "
+                "Repeated blocks are shown once with a repetition count."
+            )
 
-                if source_name and target_name:
-                    prompt_lines.append(f"- {source_name} --[{edge.label}]--> {target_name}")
+            for line in self._format_compressed_flow(compressed_flow, node_lookup):
+                prompt_lines.append(line)
 
         prompt_lines.append("")
         prompt_lines.append("FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):")
         prompt_lines.append("- Treat this as a local execution slice, not a high-level business feature.")
-        prompt_lines.append("- Infer what is happening step-by-step from the provided operation flow and operation summaries.")
-        prompt_lines.append("- The name must be concrete and narrowly scoped to this segment.")
-        prompt_lines.append("- Prefer action-oriented names grounded in observed flow (for example: 'Validate Request Payload', 'Resolve Dependencies', 'Persist Entity State').")
+        prompt_lines.append("- Base the micro-feature name primarily on the compressed observed runtime flow.")
+        prompt_lines.append("- Use the function descriptions only as supporting semantic context.")
+        prompt_lines.append("- Do not assume a repeated block is the main purpose only because it repeats many times.")
+        prompt_lines.append("- First decide whether repeated behavior is domain-specific or supporting behavior.")
+        prompt_lines.append("- Supporting behavior includes logging, validation, parsing, formatting, serialization, configuration, error handling, dispatching, and utility calls.")
+        prompt_lines.append("- If the repeated block looks like support behavior, mention it in the description only if it helps explain the segment.")
+        prompt_lines.append("- The name must be concrete, action-oriented, and narrowly scoped to this segment.")
+        prompt_lines.append("- Prefer names grounded in observed runtime behavior, for example: 'Validate Request Payload', 'Resolve Command Handler', 'Persist Entity State'.")
         prompt_lines.append("- Avoid broad/system-level names and avoid project-domain mentions.")
-        prompt_lines.append("- The description should summarize the core transition or sequence represented by this segment.")
         prompt_lines.append("- Do not invent operations, entities, or transitions that are not present in the input.")
-        prompt_lines.append("- Reuse operation terminology from the provided nodes and edges whenever possible.")
+        prompt_lines.append("- Reuse terminology from the provided function names and runtime flow whenever possible.")
+        prompt_lines.append("- The description should summarize the core transition or sequence represented by this micro-feature.")
 
         prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_micro_feature_tool)
     
-    def prompt_hierarchical_feature(self, description_a: str, description_b: str) -> dict:
-        left_description = (description_a or "").strip() or "No description provided."
-        right_description = (description_b or "").strip() or "No description provided."
+    def prompt_hierarchical_feature(self, feature_a: Any, feature_b: Any) -> dict:
+        left = self._normalize_hierarchical_child(feature_a)
+        right = self._normalize_hierarchical_child(feature_b)
 
         prompt_lines = [
-            "Analyze the following descriptions of two consecutive trace segments and merge them into one hierarchical feature.",
-            "The output must capture the shared/combined execution intent of both segments.",
+            "Analyze the following two consecutive child features and merge them into one parent hierarchical feature.",
+            "The parent feature should describe the combined sequential behavior of Child A followed by Child B.",
             "",
-            "### Consecutive Trace Segment A:",
-            f"- {left_description}",
+            "Important: do not force a vague shared theme if the two children represent different phases.",
+            "If they are different phases, name the parent as a concrete flow from the first phase to the second phase.",
             "",
-            "### Consecutive Trace Segment B:",
-            f"- {right_description}",
+            "### Consecutive Child Feature A",
+            f"- Name: {left['name']}",
+            f"- Description: {left['description']}",
+            "",
+            "### Consecutive Child Feature B",
+            f"- Name: {right['name']}",
+            f"- Description: {right['description']}",
             "",
             "FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):",
-            "- Generate one merged feature_name that is concrete and flow-aware.",
-            "- The description should summarize the combined behavior of both segments in clear, concrete language.",
-            "- Reuse wording from the provided descriptions whenever possible.",
-            "- Do not introduce entities, operations, or system context not present in the two descriptions.",
-            "- Avoid generic names like 'Merged Feature' unless there is no concrete signal.",
+            "- Generate one parent feature_name that is concrete, action-oriented, and flow-aware.",
+            "- Preserve the sequential relation: Child A happens before Child B.",
+            "- The name should capture the combined execution intent, not only the most repeated or most generic part.",
+            "- If one child looks like support behavior, such as logging, validation, parsing, formatting, serialization, configuration, error handling, dispatching, or utility calls, do not let it dominate the parent name unless it is clearly the main purpose.",
+            "- The description should summarize how Child A leads into or complements Child B.",
+            "- Reuse wording from the child names and descriptions whenever possible.",
+            "- Do not introduce entities, operations, or system context not present in the two children.",
+            "- Avoid generic names like 'Merged Feature', 'Process Data', or 'Handle Operation' unless there is no concrete signal.",
+            "- Keep the feature_name concise, preferably 3 to 7 words.",
+            "- Keep the description to 1 or 2 clear sentences.",
         ]
 
         prompt = "\n".join(prompt_lines) + "\n"
 
         return self.llm.generate_json(prompt, analyze_hierarchical_feature_tool)
+    
+    def _format_compressed_flow(
+        self,
+        compressed_flow: List[Dict[str, Any]],
+        node_lookup: Dict[str, str],
+    ) -> List[str]:
+        lines = []
+
+        for item in compressed_flow:
+            item_type = item.get("type")
+
+            if item_type == "step":
+                lines.append(f"- {self._format_runtime_step(item, node_lookup)}")
+
+            elif item_type == "repeat":
+                repeat_count = (
+                    item.get("repeatCount")
+                    or item.get("repeat_count")
+                    or item.get("count")
+                    or "?"
+                )
+
+                start_step = item.get("startStep") or item.get("start_step")
+                end_step = item.get("endStep") or item.get("end_step")
+
+                if start_step is not None and end_step is not None:
+                    lines.append(
+                        f"- Repeating block, {repeat_count} times "
+                        f"(observed across steps {start_step}-{end_step}):"
+                    )
+                else:
+                    lines.append(f"- Repeating block, {repeat_count} times:")
+
+                nested_steps = item.get("steps") or item.get("block") or []
+
+                for nested_step in nested_steps:
+                    lines.append(f"  - {self._format_runtime_step(nested_step, node_lookup)}")
+
+            else:
+                lines.append(f"- {self._format_runtime_step(item, node_lookup)}")
+
+        return lines
+
+
+    def _format_runtime_step(
+        self,
+        step_item: Dict[str, Any],
+        node_lookup: Dict[str, str],
+    ) -> str:
+        step_number = step_item.get("step") or step_item.get("stepNumber") or step_item.get("step_number")
+        kind = str(step_item.get("kind") or step_item.get("type") or "step").lower()
+
+        source_id = step_item.get("sourceId") or step_item.get("source_id")
+        target_id = step_item.get("targetId") or step_item.get("target_id")
+
+        source_name = self._operation_display_name(source_id, node_lookup)
+        target_name = self._operation_display_name(target_id, node_lookup)
+
+        if source_name and target_name:
+            transition = f"{source_name} -> {target_name}"
+        elif target_name:
+            transition = target_name
+        elif source_name:
+            transition = source_name
+        else:
+            transition = "Unknown operation"
+
+        prefix = f"Step {step_number}: " if step_number is not None else ""
+
+        if kind and kind not in {"step", "unknown"}:
+            return f"{prefix}{kind} {transition}"
+
+        return f"{prefix}{transition}"
+
+
+    def _operation_display_name(
+        self,
+        node_id: Any,
+        node_lookup: Dict[str, str],
+    ) -> str:
+        if not node_id:
+            return ""
+
+        node_id_text = str(node_id)
+
+        if node_id_text in node_lookup:
+            return node_lookup[node_id_text]
+
+        value = node_id_text
+
+        if ":///" in value:
+            value = value.split(":///", 1)[1]
+
+        value = value.split("(", 1)[0]
+        value = value.replace("\\", "/")
+        value = value.replace("::", "/")
+
+        if "/" in value:
+            value = value.rsplit("/", 1)[-1]
+
+        return value or node_id_text
+    
+    def _normalize_hierarchical_child(self, feature: Any) -> Dict[str, str]:
+        if isinstance(feature, dict):
+            name = str(feature.get("name") or "").strip()
+            description = str(feature.get("description") or "").strip()
+
+            return {
+                "name": name or "Unnamed child feature",
+                "description": description or "No description provided.",
+            }
+
+        description = str(feature or "").strip()
+
+        return {
+            "name": "Unnamed child feature",
+            "description": description or "No description provided.",
+        }

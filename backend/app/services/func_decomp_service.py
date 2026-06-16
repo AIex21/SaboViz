@@ -5,6 +5,7 @@ from typing import Any, Optional
 import numpy as np
 from sqlalchemy.orm import Session
 
+from app.services.sabo_gen.config import NODE_OPERATION
 from app.models.feature import Feature
 from app.repositories.feature_repo import FeatureRepository
 from app.repositories.micro_features_repo import MicroFeaturesRepository
@@ -247,14 +248,15 @@ class FunctionalDecompositionService:
         feature_name = default_name
 
         if allow_ai:
-            internal_edges = self.graph_service.get_edges_between_nodes(components)
-            ai_result = summarizer.prompt_feature(
-                linked_nodes,
-                internal_edges,
-                category == "Infrastructure",
-            )
-            feature_name = ai_result.get("feature_name", default_name)
-            feature_description = ai_result.get("description", None)
+            operation_nodes = self.collect_operation_nodes(components, node_lookup)
+
+            if operation_nodes:
+                ai_result = summarizer.prompt_feature(
+                    operation_nodes = operation_nodes,
+                    is_infrastructure=(category == "Infrastructure"),
+                )
+                feature_name = ai_result.get("feature_name", default_name)
+                feature_description = ai_result.get("description", None)
 
         feature = Feature(
             project_id=project_id,
@@ -671,3 +673,19 @@ class FunctionalDecompositionService:
                 })
 
         return execution_units
+    
+    def collect_operation_nodes(self, components, node_lookup):
+        operation_nodes = []
+
+        for node_id in components:
+            node = node_lookup.get(node_id)
+            if not node:
+                continue
+
+            labels = set(node.labels or [])
+            if NODE_OPERATION not in labels:
+                continue
+
+            operation_nodes.append(node)
+
+        return operation_nodes
