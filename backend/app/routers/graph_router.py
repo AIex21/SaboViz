@@ -229,7 +229,8 @@ def start_decomposition(
     background_tasks: BackgroundTasks,
     service: FunctionalDecompositionService = Depends(get_decomposition_service),
     graph_service: GraphService = Depends(get_service),
-    use_ai: bool = Query(True, description="Use AI for feature naming and descriptions")
+    use_ai: bool = Query(True, description="Use AI for feature naming and descriptions"),
+    use_execution_units: bool = Query(True, description="Use trace-decomposition execution units as observations. Disable this to cluster features from whole traces while still persisting trace decomposition.")
 ):
     if not graph_service.get_project_by_id(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
@@ -239,6 +240,7 @@ def start_decomposition(
             service.run_functional_decomposition,
             project_id,
             use_ai,
+            use_execution_units,
         )
         return {"message": "Decomposition started in the background"}
     except Exception as e:

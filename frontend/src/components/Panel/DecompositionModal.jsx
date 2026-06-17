@@ -4,9 +4,10 @@ import ModalButton from '../Common/ModalButton';
 
 const DecompositionModal = ({ project, onClose, onConfirm }) => {
     const [useAi, setUseAi] = useState(true);
+    const [useExecutionUnits, setUseExecutionUnits] = useState(true);
 
     const handleSubmit = () => {
-        onConfirm(project.id, useAi);
+        onConfirm(project.id, useAi, useExecutionUnits);
         onClose();
     };
 
@@ -39,6 +40,23 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                             />
                             <span style={styles.toggleText}>
                                 {useAi ? 'Enabled (LLM-assisted labels)' : 'Disabled (rule-based labels only)'}
+                            </span>
+                        </label>
+                    </div>
+
+                    <div style={styles.controlGroup}>
+                        <div style={styles.labelRow}>
+                            <label style={styles.label}>Use Execution Units for Feature Grouping</label>
+                        </div>
+                        <label style={styles.toggleRow}>
+                            <input
+                                type="checkbox"
+                                checked={useExecutionUnits}
+                                onChange={(e) => setUseExecutionUnits(e.target.checked)}
+                                style={styles.checkbox}
+                            />
+                            <span style={styles.toggleText}>
+                                {useExecutionUnits ? 'Enabled (group by execution units)' : 'Disabled (group by whole traces)'}
                             </span>
                         </label>
                     </div>

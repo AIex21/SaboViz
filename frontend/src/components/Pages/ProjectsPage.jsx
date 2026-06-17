@@ -233,14 +233,22 @@ const ProjectsPage = () => {
         }
     };
 
-    const handleConfirmDecomposition = async (projectId, useAi) => {
+    const handleConfirmDecomposition = async (projectId, useAi, useExecutionUnits) => {
         try {
-            await projectApi.startDecomposition(projectId, useAi);
+            await projectApi.startDecomposition(projectId, useAi, useExecutionUnits);
             
             showToast("Functional decomposition started.", "info");
 
             setProjects(prev => prev.map(p => 
-                p.id === projectId ? { ...p, status: 'decomposing', description: 'Grouping features...' } : p
+                p.id === projectId
+                    ? {
+                        ...p,
+                        status: 'decomposing',
+                        description: useExecutionUnits
+                            ? 'Grouping features from execution units...'
+                            : 'Grouping features from whole traces...'
+                    }
+                    : p
             ));
         } catch (error) {
             showToast("Failed to start decomposition.", "error");

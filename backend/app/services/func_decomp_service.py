@@ -298,6 +298,7 @@ class FunctionalDecompositionService:
         self,
         project_id: int,
         use_ai: bool = True,
+        use_execution_units: bool = True,
     ):
         self.graph_service.change_project_status(
             project_id,
@@ -331,13 +332,19 @@ class FunctionalDecompositionService:
             node_lookup=node_lookup,
         )
 
+        unit_source = "trace decomposition" if use_execution_units else "whole traces"
+
         self._set_decomposition_status(
-            "Functional Decomposition: Building feature matrix..."
+            f"Functional Decomposition: Building feature matrix from {unit_source}..."
         )
 
-        execution_units = self._load_execution_units_from_trace_decomposition(project_id)
+        functional_units = (
+            self._load_execution_units_from_trace_decomposition(project_id)
+            if use_execution_units
+            else self.load_traces(project_id)
+        )
 
-        if not execution_units:
+        if not functional_units:
             self.graph_service.change_project_status(
                 project_id,
                 status="ready",
@@ -345,7 +352,7 @@ class FunctionalDecompositionService:
             )
             return
         
-        X, all_functions = self.build_feature_matrix(execution_units)
+        X, all_functions = self.build_feature_matrix(functional_units)
 
         self._set_decomposition_status(
             "Functional Decomposition: Clustering features..."

@@ -148,10 +148,12 @@ export const projectApi = {
     startDecomposition: async (
         projectId,
         useAi = true,
+        useExecutionUnits = true
     ) => {
         const response = await api.post(`/projects/${projectId}/decompose`, null, {
             params: {
-                use_ai: useAi
+                use_ai: useAi,
+                use_execution_units: useExecutionUnits
             }
         });
         return response.data;
