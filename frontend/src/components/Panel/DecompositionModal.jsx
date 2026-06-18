@@ -44,7 +44,7 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                         </label>
                     </div>
 
-                    <div style={styles.controlGroup}>
+                    {/* <div style={styles.controlGroup}>
                         <div style={styles.labelRow}>
                             <label style={styles.label}>Use Execution Units for Feature Grouping</label>
                         </div>
@@ -59,7 +59,7 @@ const DecompositionModal = ({ project, onClose, onConfirm }) => {
                                 {useExecutionUnits ? 'Enabled (group by execution units)' : 'Disabled (group by whole traces)'}
                             </span>
                         </label>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Footer */}

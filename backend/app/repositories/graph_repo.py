@@ -135,14 +135,20 @@ class GraphRepository:
             not_(Edge.label.in_(['includes', 'contains', 'declares', 'encapsulates', 'encloses', 'uses', 'typed']))
         ).all()
     
-    def get_edges_between_nodes(self, node_ids: list[str]):
+    def get_edges_between_nodes(self, project_id: int, node_ids: list[str], labels: list[str] | None = None):
         if not node_ids:
             return []
         
-        return self.db.query(Edge).filter(
+        query = self.db.query(Edge).filter(
+            Edge.project_id == project_id,
             Edge.source_id.in_(node_ids),
             Edge.target_id.in_(node_ids)
-        ).all()
+        )
+        
+        if labels is not None:
+            query = query.filter(Edge.label.in_(labels))
+        
+        return query.all()
 
     def bulk_create_nodes(self, nodes_data: list[dict]):
         self.db.bulk_insert_mappings(Node, nodes_data)

@@ -346,7 +346,7 @@ class SummarizationService:
 
         return self.llm.generate_json(prompt, analyze_project_tool)
     
-    def prompt_feature(self, operation_nodes: list[Node], is_infrastructure: bool = False) -> dict:
+    def prompt_feature(self, operation_nodes: list[Node], operation_edges: list[Edge], is_infrastructure: bool = False) -> dict:
         feature_kind = "Infrastructure Feature" if is_infrastructure else "Business/User-Facing Feature"
 
         prompt_lines = [
@@ -359,14 +359,42 @@ class SummarizationService:
             "### Functions/Operations in This Feature Cluster",
         ]
 
+        node_lookup = {}
+
         for node in operation_nodes:
             name = node.properties.get("simpleName", node.id)
+            node_lookup[node.id] = node
 
             summary = "No summary available."
             if node.ai_summary and isinstance(node.ai_summary, dict):
                 summary = node.ai_summary.get("description") or summary
 
             prompt_lines.append(f"- {name}: {summary}")
+
+        if operation_edges:
+            prompt_lines.append("")
+            prompt_lines.append("### Relationships Between Functions in This Feature Cluster")
+            prompt_lines.append(
+                "These are directed static relationships between the listed operations. "
+                "Use them to understand how the functions collaborate, but do not invent behavior beyond them."
+            )
+
+            seen_edges = set()
+
+            for edge in operation_edges:
+                source_name = node_lookup.get(edge.source_id)
+                target_name = node_lookup.get(edge.target_id)
+
+                if not source_name or not target_name:
+                    continue
+
+                edge_key = (source_name, edge.label, target_name)
+                if edge_key in seen_edges:
+                    continue
+
+                seen_edges.add(edge_key)
+                prompt_lines.append(f"- {source_name} --{edge.label}--> {target_name}")
+
 
         prompt_lines.append("")
         prompt_lines.append("FINAL INSTRUCTIONS (APPLY THESE RIGHT BEFORE RETURNING JSON):")

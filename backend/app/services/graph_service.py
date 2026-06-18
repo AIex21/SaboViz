@@ -70,8 +70,8 @@ class GraphService:
     def get_nodes_by_ids(self, node_ids: list[str]):
         return self.repo.get_nodes_by_ids(node_ids)
     
-    def get_edges_between_nodes(self,  node_ids: list[str]):
-        return self.repo.get_edges_between_nodes(node_ids)
+    def get_edges_between_nodes(self, project_id: int, node_ids: list[str], labels: list[str] | None = None):
+        return self.repo.get_edges_between_nodes(project_id, node_ids, labels)
     
     def update_node(self, node: Node):
         self.repo.update_node(node)

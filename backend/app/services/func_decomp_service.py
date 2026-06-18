@@ -5,7 +5,7 @@ from typing import Any, Optional
 import numpy as np
 from sqlalchemy.orm import Session
 
-from app.services.sabo_gen.config import NODE_OPERATION
+from app.services.sabo_gen.config import NODE_OPERATION, EDGE_INVOKES
 from app.models.feature import Feature
 from app.repositories.feature_repo import FeatureRepository
 from app.repositories.micro_features_repo import MicroFeaturesRepository
@@ -251,8 +251,17 @@ class FunctionalDecompositionService:
             operation_nodes = self.collect_operation_nodes(components, node_lookup)
 
             if operation_nodes:
+                operation_node_ids = [node.id for node in operation_nodes]
+
+                operation_edges = self.graph_service.get_edges_between_nodes(
+                    project_id=project_id,
+                    node_ids=operation_node_ids,
+                    labels=[EDGE_INVOKES],
+                )
+
                 ai_result = summarizer.prompt_feature(
                     operation_nodes = operation_nodes,
+                    operation_edges = operation_edges,
                     is_infrastructure=(category == "Infrastructure"),
                 )
                 feature_name = ai_result.get("feature_name", default_name)
