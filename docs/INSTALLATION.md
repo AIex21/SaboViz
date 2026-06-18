@@ -114,7 +114,7 @@ Use this method to deploy SaboViz anywhere.
 
 Because the compiled environment is large (~ 1.8 GB), it is not stored in the Git repository.
 
-#### 1. Download the `sabo-viz.tar` file from this link: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQB6dz9_D7VXSbV3z-vbGSAOASJT--yh702ZaOBBI_I-DPI?e=XD45Ws
+#### 1. Download the `sabo-viz.tar` file from this link: https://tuenl-my.sharepoint.com/:u:/g/personal/a_ion_student_tue_nl/IQAB2ydhKMxKS5zbYE1V6UafAVc7QIV7OqlPLIeCGdLrlME?e=cc7Q8t
 
 #### 2. Place the downloaded `sabo-viz.tar` file in the same directory as the `docker-compose.prod.yml` (or `podman-compose.prod.yml`) and `.env` files.
 
